@@ -86,8 +86,9 @@
       gap: 6px;
     }
     .status { display: flex; align-items: center; gap: 6px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; transition: background 0.3s; }
     .status-dot.active { background: #10b981; }
+    .status-dot.offline { background: #ef4444; animation: pulse 1s infinite alternate; }
     .get-key-link { color: #818cf8; text-decoration: none; font-weight: 500; }
 
     /* Sidebar Drawer */
@@ -522,6 +523,26 @@
     let speechRecognizer = null;
     let isRecording = false;
 
+    // --- Live Network & Drop-out Detection ---
+    window.addEventListener("online", () => {
+      const dot = document.getElementById("status-indicator");
+      const text = document.getElementById("status-text");
+      dot.classList.remove("offline");
+      text.innerText = "Reconnected";
+      const model = document.getElementById("model-select").value;
+      if (model) {
+        dot.classList.add("active");
+        text.innerText = `Connected: ${model}`;
+      }
+    });
+
+    window.addEventListener("offline", () => {
+      const dot = document.getElementById("status-indicator");
+      const text = document.getElementById("status-text");
+      dot.className = "status-dot offline";
+      text.innerText = "❌ Offline: Network dropped!";
+    });
+
     function captureSnapshot() {
       const current = getActiveSession();
       if (!current) return;
@@ -730,7 +751,6 @@
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
       
-      // Pin target directly to active editor file to prevent cross-file overwrites
       const targetPath = activeFileName || document.getElementById("gh-path").value.trim() || "index.html";
       document.getElementById("gh-path").value = targetPath;
       saveGhConfig();
@@ -831,7 +851,7 @@
         history: [JSON.parse(JSON.stringify(DEFAULT_PROJECT))],
         historyIdx: 0,
         messages: [],
-        selectedProvider: "gemini", // Clean default for new chat
+        selectedProvider: "gemini",
         selectedModel: ""
       };
       sessions.unshift(newSession);
@@ -888,7 +908,6 @@
         current.historyIdx = 0;
       }
 
-      // Restore the specific provider & model selected for this chat
       if (current.selectedProvider) {
         document.getElementById("provider-select").value = current.selectedProvider;
       } else {
@@ -969,7 +988,6 @@
       document.getElementById("preview-frame").srcdoc = html + injectedHooks;
     }
 
-    // --- Autonomous Verification Routine ---
     function triggerAutonomousVerification() {
       const banner = document.getElementById("diff-banner");
       banner.style.display = "none";
@@ -1077,6 +1095,12 @@
       const statusText = document.getElementById("status-text");
       const statusDot = document.getElementById("status-indicator");
       const current = getActiveSession();
+
+      if (!navigator.onLine) {
+        statusDot.className = "status-dot offline";
+        statusText.innerText = "❌ No connection (Offline)";
+        return;
+      }
 
       if (!key) return;
       saveCurrentKey();
@@ -1214,18 +1238,17 @@
           if (target) modelSelect.value = target;
         }
 
-        // Save selected model into session memory
         if (current) {
           current.selectedModel = modelSelect.value;
           current.selectedProvider = provider;
           saveSessions();
         }
 
-        statusDot.classList.add("active");
+        statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${modelSelect.value}`;
       } catch (err) {
-        statusDot.classList.remove("active");
-        statusText.innerText = "Error: " + err.message;
+        statusDot.className = "status-dot offline";
+        statusText.innerText = "Connection Error: " + err.message;
       }
     }
 
@@ -1237,6 +1260,14 @@
       const model = document.getElementById("model-select").value;
       const current = getActiveSession();
       const customRules = localStorage.getItem("omni_cursorrules") || "";
+      const statusText = document.getElementById("status-text");
+      const statusDot = document.getElementById("status-indicator");
+
+      if (!navigator.onLine) {
+        statusDot.className = "status-dot offline";
+        statusText.innerText = "❌ Network dropped!";
+        return alert("Cannot send prompt: Internet connection dropped!");
+      }
 
       if (!prompt && !attachedImage) return;
       if (!key || !model) return alert("Please connect an API key first.");
@@ -1261,6 +1292,10 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
+      // 30-second timeout controller to detect stalled/dead connections instantly
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), 30000);
+
       try {
         let reply = "";
 
@@ -1272,7 +1307,8 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ role: "user", parts }] })
+            body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+            signal: timeoutController.signal
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
@@ -1308,7 +1344,8 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
             body: JSON.stringify({
               model: model,
               messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
-            })
+            }),
+            signal: timeoutController.signal
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -1335,13 +1372,15 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
               system: systemPrompt,
               max_tokens: 4096,
               messages: [{ role: "user", content }]
-            })
+            }),
+            signal: timeoutController.signal
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           reply = data.content[0].text;
         }
 
+        clearTimeout(timeoutId);
         clearAttachedImage();
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
@@ -1362,7 +1401,18 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
         saveSessions();
 
       } catch (err) {
-        loadingMsg.innerText = "Error: " + err.message;
+        clearTimeout(timeoutId);
+        statusDot.className = "status-dot offline";
+        
+        let errorMsg = err.message;
+        if (err.name === "AbortError") {
+          errorMsg = "Request timed out (Connection dead or dropped)!";
+        } else if (!navigator.onLine) {
+          errorMsg = "Network connection dropped mid-request!";
+        }
+
+        statusText.innerText = "❌ Connection Dropped";
+        loadingMsg.innerText = "⚠️ Failed: " + errorMsg;
       }
     }
 
