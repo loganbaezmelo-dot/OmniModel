@@ -14,7 +14,6 @@
       --muted: #9ca3af;
       --danger: #ef4444;
       --success: #10b981;
-      --gh-dark: #24292f;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -76,24 +75,12 @@
       flex-wrap: wrap;
       gap: 6px;
     }
-    .status {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #ef4444;
-    }
+    .status { display: flex; align-items: center; gap: 6px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
     .status-dot.active { background: #10b981; }
-    .get-key-link {
-      color: #818cf8;
-      text-decoration: none;
-      font-weight: 500;
-    }
+    .get-key-link { color: #818cf8; text-decoration: none; font-weight: 500; }
 
+    /* Sidebar Drawer */
     #sidebar-overlay {
       position: fixed;
       inset: 0;
@@ -143,24 +130,9 @@
       font-size: 13px;
       border: 1px solid transparent;
     }
-    .chat-item.active {
-      border-color: var(--accent);
-      background: #2e3447;
-    }
-    .chat-item-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-    }
-    .chat-del-btn {
-      background: none;
-      border: none;
-      color: var(--danger);
-      font-size: 16px;
-      padding: 2px 6px;
-      cursor: pointer;
-    }
+    .chat-item.active { border-color: var(--accent); background: #2e3447; }
+    .chat-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .chat-del-btn { background: none; border: none; color: var(--danger); font-size: 16px; padding: 2px 6px; cursor: pointer; }
 
     .sidebar-section {
       padding: 12px;
@@ -178,25 +150,10 @@
       justify-content: space-between;
       align-items: center;
     }
-    .gh-inputs {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .gh-inputs input {
-      font-size: 12px;
-      padding: 6px 10px;
-    }
-    .gh-btns {
-      display: flex;
-      gap: 6px;
-    }
-    .gh-btns button {
-      flex: 1;
-      padding: 6px 8px;
-      font-size: 12px;
-    }
-
+    .gh-inputs { display: flex; flex-direction: column; gap: 6px; }
+    .gh-inputs input { font-size: 12px; padding: 6px 10px; }
+    .gh-btns { display: flex; gap: 6px; }
+    .gh-btns button { flex: 1; padding: 6px 8px; font-size: 12px; }
     .rules-textarea {
       width: 100%;
       height: 60px;
@@ -211,11 +168,8 @@
       font-family: monospace;
     }
 
-    .nav-tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      background: #151821;
-    }
+    /* Tabs (Mobile) */
+    .nav-tabs { display: flex; border-bottom: 1px solid var(--border); background: #151821; }
     .tab-btn {
       flex: 1;
       padding: 10px;
@@ -225,27 +179,14 @@
       color: var(--muted);
       font-size: 13px;
     }
-    .tab-btn.active {
-      color: var(--text);
-      border-bottom-color: var(--accent);
-      font-weight: 600;
-    }
+    .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 
-    main {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-    }
-    .view-panel {
-      position: absolute;
-      inset: 0;
-      display: none;
-      flex-direction: column;
-    }
+    /* Workspace Panels */
+    main { flex: 1; position: relative; overflow: hidden; }
+    .view-panel { position: absolute; inset: 0; display: none; flex-direction: column; }
     .view-panel.active { display: flex; }
 
     .panel-header {
-      display: none;
       padding: 8px 12px;
       background: #151821;
       border-bottom: 1px solid var(--border);
@@ -254,10 +195,57 @@
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
+    /* File Tree Bar */
+    .file-tree-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      background: #0f1117;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .file-pill {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: #1a1d26;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .file-pill.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .file-pill-del {
+      font-size: 11px;
+      opacity: 0.7;
+    }
+    .file-pill-del:hover { opacity: 1; }
+
+    /* Time Machine Toolbar */
+    .history-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .history-btn {
+      padding: 2px 8px;
+      font-size: 11px;
+      background: #252a36;
+    }
+
+    /* Diff Review Banner */
     #diff-banner {
       display: none;
       padding: 8px 12px;
@@ -268,21 +256,11 @@
       font-size: 13px;
       gap: 10px;
     }
-    .diff-actions {
-      display: flex;
-      gap: 6px;
-    }
-    .btn-apply {
-      background: var(--success);
-      padding: 4px 10px;
-      font-size: 12px;
-    }
-    .btn-discard {
-      background: var(--danger);
-      padding: 4px 10px;
-      font-size: 12px;
-    }
+    .diff-actions { display: flex; gap: 6px; }
+    .btn-apply { background: var(--success); padding: 4px 10px; font-size: 12px; }
+    .btn-discard { background: var(--danger); padding: 4px 10px; font-size: 12px; }
 
+    /* Runtime Error Banner */
     #error-banner {
       display: none;
       padding: 8px 12px;
@@ -294,45 +272,33 @@
       justify-content: space-between;
       gap: 8px;
     }
-    #error-banner button {
-      background: var(--danger);
-      padding: 4px 10px;
-      font-size: 12px;
-      white-space: nowrap;
-    }
+    #error-banner button { background: var(--danger); padding: 4px 10px; font-size: 12px; white-space: nowrap; }
 
-    #chat-history {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    #chat-history { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
+    .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+    .msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
+    .msg img { max-width: 100%; border-radius: 6px; margin-top: 6px; }
+
+    .image-preview-bar {
+      display: none;
+      padding: 6px 12px;
+      background: #151821;
+      border-top: 1px solid var(--border);
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
     }
-    .msg {
-      padding: 10px 14px;
-      border-radius: 8px;
-      max-width: 85%;
-      font-size: 14px;
-      line-height: 1.4;
-      white-space: pre-wrap;
-    }
-    .msg.user {
-      align-self: flex-end;
-      background: var(--accent);
-      color: #fff;
-    }
-    .msg.assistant {
-      align-self: flex-start;
-      background: var(--card);
-      border: 1px solid var(--border);
-    }
+    .image-preview-bar img { height: 32px; width: 32px; object-fit: cover; border-radius: 4px; }
+    .image-preview-bar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
     .input-row {
       display: flex;
       padding: 10px;
       background: var(--card);
       border-top: 1px solid var(--border);
-      gap: 8px;
+      gap: 6px;
+      align-items: center;
     }
     .input-row textarea {
       flex: 1;
@@ -346,6 +312,19 @@
       height: 44px;
       outline: none;
     }
+    .media-btn {
+      padding: 10px 12px;
+      background: #252a36;
+      border: 1px solid var(--border);
+      font-size: 16px;
+      display: grid;
+      place-content: center;
+    }
+    .media-btn.recording {
+      background: var(--danger);
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
 
     #code-editor {
       width: 100%;
@@ -360,56 +339,41 @@
       outline: none;
     }
 
-    .preview-toolbar {
-      padding: 6px 12px;
-      background: #151821;
-      border-bottom: 1px solid var(--border);
+    /* Preview Canvas Area */
+    .preview-container {
+      flex: 1;
+      background: #1e222d;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
+      justify-content: center;
+      align-items: stretch;
+      overflow: auto;
+      position: relative;
     }
-    .inspect-toggle-btn {
-      padding: 4px 10px;
-      font-size: 12px;
+    #preview-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #ffffff;
+      transition: width 0.2s ease;
+    }
+    .viewport-pill {
+      padding: 2px 6px;
+      font-size: 11px;
       background: #252a36;
       border: 1px solid var(--border);
       border-radius: 4px;
+      cursor: pointer;
     }
-    .inspect-toggle-btn.active {
+    .viewport-pill.active {
       background: var(--accent);
       color: #fff;
-      border-color: var(--accent);
-    }
-
-    #preview-frame {
-      width: 100%;
-      flex: 1;
-      border: none;
-      background: #ffffff;
     }
 
     @media (min-width: 900px) {
-      .nav-tabs {
-        display: none;
-      }
-      main {
-        display: grid;
-        grid-template-columns: 360px 1fr 1fr;
-        height: 100%;
-      }
-      .view-panel {
-        position: relative !important;
-        inset: auto !important;
-        display: flex !important;
-        border-right: 1px solid var(--border);
-      }
-      .view-panel:last-child {
-        border-right: none;
-      }
-      .panel-header {
-        display: flex;
-      }
+      .nav-tabs { display: none; }
+      main { display: grid; grid-template-columns: 380px 1fr 1fr; height: 100%; }
+      .view-panel { position: relative !important; inset: auto !important; display: flex !important; border-right: 1px solid var(--border); }
+      .view-panel:last-child { border-right: none; }
     }
   </style>
 </head>
@@ -426,9 +390,9 @@
     <div class="sidebar-section">
       <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
-        <input type="password" id="gh-token" placeholder="GitHub Personal Access Token (repo)" oninput="saveGhConfig()">
-        <input type="text" id="gh-repo" placeholder="owner/repo (e.g. user/my-app)" oninput="saveGhConfig()">
-        <input type="text" id="gh-path" placeholder="File Path (e.g. index.html)" value="index.html" oninput="saveGhConfig()">
+        <input type="password" id="gh-token" placeholder="GitHub PAT (repo scope)" oninput="saveGhConfig()">
+        <input type="text" id="gh-repo" placeholder="owner/repo" oninput="saveGhConfig()">
+        <input type="text" id="gh-path" placeholder="File Path" value="index.html" oninput="saveGhConfig()">
       </div>
       <div class="gh-btns">
         <button class="icon-btn" onclick="pullFromGitHub()">⬇ Pull</button>
@@ -438,7 +402,7 @@
     
     <div class="sidebar-section">
       <h4>Global Rules (.cursorrules)</h4>
-      <textarea id="rules-input" class="rules-textarea" placeholder="e.g. Always use Tailwind CSS, mobile responsive..." oninput="saveRules()"></textarea>
+      <textarea id="rules-input" class="rules-textarea" placeholder="e.g. Always use Tailwind, mobile responsive..." oninput="saveRules()"></textarea>
     </div>
   </aside>
 
@@ -468,22 +432,47 @@
 
   <nav class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab('chat')">AI Chat</button>
-    <button class="tab-btn" onclick="switchTab('code')">Current Code</button>
+    <button class="tab-btn" onclick="switchTab('code')">Code & Files</button>
     <button class="tab-btn" onclick="switchTab('preview')">Live Preview</button>
   </nav>
 
   <main>
+    <!-- View: Chat -->
     <div id="view-chat" class="view-panel active">
-      <div class="panel-header">AI Chat</div>
+      <div class="panel-header">
+        <span>AI Assistant</span>
+        <div class="history-controls">
+          <button class="history-btn" onclick="undoSnapshot()" title="Rollback last edit">↩ Undo</button>
+          <button class="history-btn" onclick="redoSnapshot()" title="Redo edit">↪ Redo</button>
+        </div>
+      </div>
       <div id="chat-history"></div>
+      
+      <div id="image-preview-bar" class="image-preview-bar">
+        <img id="attached-thumb" src="" alt="Attached Image">
+        <span id="attached-name">image.png</span>
+        <button class="icon-btn" style="padding:2px 6px;" onclick="clearAttachedImage()">×</button>
+      </div>
+
       <div class="input-row">
-        <textarea id="prompt-input" placeholder="Prompt AI to edit/create web code..."></textarea>
+        <input type="file" id="file-uploader" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
+        <button class="media-btn" title="Attach wireframe or UI screenshot" onclick="document.getElementById('file-uploader').click()">📎</button>
+        <button id="voice-btn" class="media-btn" title="Voice to Code" onclick="toggleVoiceInput()">🎙️</button>
+        <textarea id="prompt-input" placeholder="Prompt AI to code, edit, or fix..."></textarea>
         <button id="send-btn" onclick="sendMessage()">Send</button>
       </div>
     </div>
 
+    <!-- View: Multi-File Code Editor -->
     <div id="view-code" class="view-panel">
-      <div class="panel-header">Current Code</div>
+      <div class="panel-header">
+        <span>Files & Code</span>
+        <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="promptNewFile()">+ File</button>
+      </div>
+      
+      <!-- Virtual File Tree -->
+      <div id="file-tree-bar" class="file-tree-bar"></div>
+
       <div id="diff-banner">
         <span>⚠️ Generated Changes Pending</span>
         <div class="diff-actions">
@@ -494,22 +483,36 @@
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
+    <!-- View: Live Preview Canvas -->
     <div id="view-preview" class="view-panel">
-      <div class="panel-header">Live Preview</div>
-      <div class="preview-toolbar">
-        <span>Sandbox Canvas</span>
-        <button id="inspect-toggle-btn" class="inspect-toggle-btn" onclick="toggleInspector()">🔍 Inspect Element</button>
+      <div class="panel-header">
+        <div style="display:flex; gap:4px; align-items:center;">
+          <span>Canvas</span>
+          <button id="inspect-toggle-btn" class="icon-btn" style="padding:2px 6px; font-size:11px;" onclick="toggleInspector()">🔍 Inspect</button>
+        </div>
+        <!-- Viewport Switcher -->
+        <div style="display:flex; gap:4px;">
+          <button class="viewport-pill" onclick="setViewport('375px', this)">📱 375</button>
+          <button class="viewport-pill" onclick="setViewport('768px', this)">💻 768</button>
+          <button class="viewport-pill active" onclick="setViewport('100%', this)">🖥️ 100%</button>
+        </div>
       </div>
       <div id="error-banner">
         <span id="error-banner-text">Error occurred</span>
         <button onclick="fixCurrentError()">Fix with AI 🪄</button>
       </div>
-      <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+      <div class="preview-container">
+        <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+      </div>
     </div>
   </main>
 
   <script>
-    const DEFAULT_CODE = "<!DOCTYPE html>\n<html>\n<head>\n  <style>body { font-family: sans-serif; display: grid; place-content: center; height: 90vh; background: #fafafa; color: #222; text-align: center; }</style>\n</head>\n<body>\n  <h2>Ready to Build 🚀</h2>\n  <p>Connect an API key and ask the model to create something!</p>\n</body>\n</html>";
+    const DEFAULT_PROJECT = {
+      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Multi-file project ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
+      "styles.css": "body {\n  font-family: sans-serif;\n  display: grid;\n  place-content: center;\n  height: 90vh;\n  background: #fafafa;\n  color: #222;\n  text-align: center;\n}",
+      "script.js": "console.log('Omni app loaded.');"
+    };
 
     const KEY_LINKS = {
       gemini: { text: "Get Gemini API Key ↗", url: "https://aistudio.google.com/app/apikey" },
@@ -519,16 +522,191 @@
 
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
     let activeSessionId = localStorage.getItem("omni_active_session_id") || null;
+    let activeFileName = "index.html";
     let pendingDiffCode = null;
     let preDiffSnapshot = null;
     let isInspectorActive = false;
     let lastCapturedError = null;
     let currentFileSha = null;
+    let attachedImage = null; // { base64, mimeType, name }
+    let speechRecognizer = null;
+    let isRecording = false;
 
+    // --- Time Machine Snapshots ---
+    function captureSnapshot() {
+      const current = getActiveSession();
+      if (!current) return;
+      if (!current.history) current.history = [];
+      if (current.historyIdx === undefined) current.historyIdx = -1;
+
+      // Drop forward history if we were rewound
+      current.history = current.history.slice(0, current.historyIdx + 1);
+      current.history.push(JSON.parse(JSON.stringify(current.files)));
+      current.historyIdx = current.history.length - 1;
+      saveSessions();
+    }
+
+    function undoSnapshot() {
+      const current = getActiveSession();
+      if (!current || !current.history || current.historyIdx <= 0) return alert("Nothing to undo!");
+      current.historyIdx--;
+      current.files = JSON.parse(JSON.stringify(current.history[current.historyIdx]));
+      saveSessions();
+      loadFileEditor();
+      renderSandboxPreview();
+    }
+
+    function redoSnapshot() {
+      const current = getActiveSession();
+      if (!current || !current.history || current.historyIdx >= current.history.length - 1) return alert("Nothing to redo!");
+      current.historyIdx++;
+      current.files = JSON.parse(JSON.stringify(current.history[current.historyIdx]));
+      saveSessions();
+      loadFileEditor();
+      renderSandboxPreview();
+    }
+
+    // --- Voice-to-Code Input ---
+    function toggleVoiceInput() {
+      const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Speech) return alert("Speech recognition is not supported in this browser.");
+
+      const btn = document.getElementById("voice-btn");
+      if (isRecording) {
+        speechRecognizer.stop();
+        return;
+      }
+
+      speechRecognizer = new Speech();
+      speechRecognizer.continuous = false;
+      speechRecognizer.interimResults = false;
+
+      speechRecognizer.onstart = () => {
+        isRecording = true;
+        btn.classList.add("recording");
+      };
+      speechRecognizer.onresult = (evt) => {
+        const transcript = evt.results[0][0].transcript;
+        const input = document.getElementById("prompt-input");
+        input.value = (input.value ? input.value + " " : "") + transcript;
+      };
+      speechRecognizer.onerror = (e) => console.error("Speech Error: ", e);
+      speechRecognizer.onend = () => {
+        isRecording = false;
+        btn.classList.remove("recording");
+      };
+
+      speechRecognizer.start();
+    }
+
+    // --- Image / Wireframe Attachment ---
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const dataUrl = evt.target.result;
+        const [meta, base64] = dataUrl.split(",");
+        const mimeType = meta.match(/:(.*?);/)[1];
+
+        attachedImage = { base64, mimeType, name: file.name, dataUrl };
+        document.getElementById("attached-thumb").src = dataUrl;
+        document.getElementById("attached-name").innerText = file.name;
+        document.getElementById("image-preview-bar").style.display = "flex";
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearAttachedImage() {
+      attachedImage = null;
+      document.getElementById("file-uploader").value = "";
+      document.getElementById("image-preview-bar").style.display = "none";
+    }
+
+    // --- Multi-Device Viewport Switcher ---
+    function setViewport(width, btn) {
+      document.querySelectorAll(".viewport-pill").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      const frame = document.getElementById("preview-frame");
+      frame.style.width = width;
+    }
+
+    // --- Multi-File Virtual Tree ---
+    function renderFileTree() {
+      const current = getActiveSession();
+      const treeBar = document.getElementById("file-tree-bar");
+      treeBar.innerHTML = "";
+      if (!current || !current.files) return;
+
+      Object.keys(current.files).forEach(filename => {
+        const pill = document.createElement("div");
+        pill.className = `file-pill ${filename === activeFileName ? "active" : ""}`;
+        pill.innerHTML = `<span>${filename}</span>`;
+        pill.onclick = () => switchFile(filename);
+
+        if (filename !== "index.html") {
+          const del = document.createElement("span");
+          del.className = "file-pill-del";
+          del.innerText = "×";
+          del.onclick = (e) => {
+            e.stopPropagation();
+            deleteFile(filename);
+          };
+          pill.appendChild(del);
+        }
+        treeBar.appendChild(pill);
+      });
+    }
+
+    function switchFile(filename) {
+      activeFileName = filename;
+      document.getElementById("gh-path").value = filename;
+      saveGhConfig();
+      renderFileTree();
+      loadFileEditor();
+    }
+
+    function promptNewFile() {
+      const name = window.prompt("New File Name (e.g. app.js, components.css):");
+      if (!name) return;
+      const current = getActiveSession();
+      if (!current.files[name]) {
+        current.files[name] = "";
+        captureSnapshot();
+        switchFile(name);
+      }
+    }
+
+    function deleteFile(name) {
+      const current = getActiveSession();
+      if (confirm(`Delete ${name}?`)) {
+        delete current.files[name];
+        captureSnapshot();
+        switchFile("index.html");
+      }
+    }
+
+    function loadFileEditor() {
+      const current = getActiveSession();
+      if (!current || !current.files) return;
+      if (!current.files[activeFileName]) activeFileName = "index.html";
+      document.getElementById("code-editor").value = current.files[activeFileName] || "";
+    }
+
+    function onCodeManualEdit() {
+      const current = getActiveSession();
+      if (!current) return;
+      current.files[activeFileName] = document.getElementById("code-editor").value;
+      saveSessions();
+      renderSandboxPreview();
+    }
+
+    // --- GitHub Git-Sync ---
     function loadGhConfig() {
       document.getElementById("gh-token").value = localStorage.getItem("omni_gh_token") || "";
       document.getElementById("gh-repo").value = localStorage.getItem("omni_gh_repo") || "";
-      document.getElementById("gh-path").value = localStorage.getItem("omni_gh_path") || "index.html";
+      document.getElementById("gh-path").value = localStorage.getItem("omni_gh_path") || activeFileName;
     }
 
     function saveGhConfig() {
@@ -540,39 +718,35 @@
     async function pullFromGitHub() {
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
-      const path = document.getElementById("gh-path").value.trim();
+      const path = document.getElementById("gh-path").value.trim() || activeFileName;
 
       if (!token || !repo || !path) return alert("Please fill in Token, Repo (owner/repo), and File Path.");
-
       const statusText = document.getElementById("status-text");
-      statusText.innerText = "Pulling from GitHub...";
+      statusText.innerText = `Pulling ${path}...`;
 
       try {
         const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Accept": "application/vnd.github+json"
-          }
+          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
         });
         const data = await res.json();
-        if (data.message && !res.ok) throw new Error(data.message);
+        if (!res.ok) throw new Error(data.message || "Failed to fetch");
 
         currentFileSha = data.sha;
-        const decodedContent = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
+        const content = decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
 
         const current = getActiveSession();
-        if (current) {
-          current.code = decodedContent;
-          saveSessions();
-          document.getElementById("code-editor").value = decodedContent;
-          renderSandboxPreview(decodedContent);
-        }
+        current.files[path] = content;
+        activeFileName = path;
+        captureSnapshot();
+        loadFileEditor();
+        renderFileTree();
+        renderSandboxPreview();
 
-        statusText.innerText = `Pulled ${path} (${data.sha.slice(0,7)})`;
+        statusText.innerText = `Pulled ${path}`;
         alert(`Successfully pulled ${path} from ${repo}!`);
         toggleSidebar();
       } catch (err) {
-        statusText.innerText = "GitHub pull failed";
+        statusText.innerText = "Pull failed";
         alert("GitHub Pull Error: " + err.message);
       }
     }
@@ -580,17 +754,17 @@
     async function pushToGitHub() {
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
-      const path = document.getElementById("gh-path").value.trim();
+      const path = document.getElementById("gh-path").value.trim() || activeFileName;
       const current = getActiveSession();
 
-      if (!token || !repo || !path) return alert("Please enter GitHub Token, Repo (owner/repo), and File Path.");
+      if (!token || !repo || !path) return alert("Please enter GitHub Token, Repo, and File Path.");
       if (!current) return;
 
-      const commitMsg = window.prompt("Commit Message:", "Update from Omni Studio");
+      const commitMsg = window.prompt("Commit Message:", `Update ${path} via Omni Studio`);
       if (!commitMsg) return;
 
       const statusText = document.getElementById("status-text");
-      statusText.innerText = "Pushing commit to GitHub...";
+      statusText.innerText = "Pushing commit...";
 
       try {
         if (!currentFileSha) {
@@ -603,11 +777,8 @@
           }
         }
 
-        const encodedContent = btoa(unescape(encodeURIComponent(current.code)));
-        const bodyPayload = {
-          message: commitMsg,
-          content: encodedContent
-        };
+        const encodedContent = btoa(unescape(encodeURIComponent(current.files[activeFileName] || "")));
+        const bodyPayload = { message: commitMsg, content: encodedContent };
         if (currentFileSha) bodyPayload.sha = currentFileSha;
 
         const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
@@ -619,37 +790,33 @@
           },
           body: JSON.stringify(bodyPayload)
         });
-
         const putData = await putRes.json();
-        if (putData.message && !putRes.ok) throw new Error(putData.message);
+        if (!putRes.ok) throw new Error(putData.message || "Failed to commit");
 
         currentFileSha = putData.content?.sha || null;
-        statusText.innerText = `Pushed commit: ${commitMsg}`;
-        alert(`Successfully pushed to ${repo}/${path}!`);
+        statusText.innerText = `Pushed: ${commitMsg}`;
+        alert(`Successfully pushed ${path} to ${repo}!`);
         toggleSidebar();
       } catch (err) {
-        statusText.innerText = "GitHub push failed";
+        statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
       }
     }
 
+    // --- Session Persistence ---
     function loadRules() {
-      const rules = localStorage.getItem("omni_cursorrules") || "Always write clean, self-contained HTML/CSS/JS in a single file with responsive design.";
-      document.getElementById("rules-input").value = rules;
+      document.getElementById("rules-input").value = localStorage.getItem("omni_cursorrules") || "Always write modern, mobile-friendly code.";
     }
     function saveRules() {
       localStorage.setItem("omni_cursorrules", document.getElementById("rules-input").value);
     }
-
     function saveSessions() {
       localStorage.setItem("omni_sessions", JSON.stringify(sessions));
       localStorage.setItem("omni_active_session_id", activeSessionId);
     }
-
     function getActiveSession() {
       return sessions.find(s => s.id === activeSessionId);
     }
-
     function toggleSidebar() {
       document.getElementById("sidebar").classList.toggle("open");
       document.getElementById("sidebar-overlay").classList.toggle("open");
@@ -670,10 +837,7 @@
         const del = document.createElement("button");
         del.className = "chat-del-btn";
         del.innerText = "×";
-        del.onclick = (e) => {
-          e.stopPropagation();
-          deleteSession(sess.id);
-        };
+        del.onclick = (e) => { e.stopPropagation(); deleteSession(sess.id); };
 
         item.appendChild(title);
         item.appendChild(del);
@@ -684,47 +848,34 @@
     function createNewSession() {
       const newSession = {
         id: "sess_" + Date.now(),
-        title: "New Session",
-        code: DEFAULT_CODE,
+        title: "New Project",
+        files: JSON.parse(JSON.stringify(DEFAULT_PROJECT)),
+        history: [JSON.parse(JSON.stringify(DEFAULT_PROJECT))],
+        historyIdx: 0,
         messages: []
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
-      currentFileSha = null;
-      pendingDiffCode = null;
-      document.getElementById("diff-banner").style.display = "none";
-      document.getElementById("error-banner").style.display = "none";
+      activeFileName = "index.html";
       saveSessions();
       loadSessionUI();
       renderSidebar();
-      if (document.getElementById("sidebar").classList.contains("open")) {
-        toggleSidebar();
-      }
+      if (document.getElementById("sidebar").classList.contains("open")) toggleSidebar();
     }
 
     function switchSession(id) {
       activeSessionId = id;
-      currentFileSha = null;
-      pendingDiffCode = null;
-      document.getElementById("diff-banner").style.display = "none";
-      document.getElementById("error-banner").style.display = "none";
+      activeFileName = "index.html";
       saveSessions();
       loadSessionUI();
       renderSidebar();
-      if (document.getElementById("sidebar").classList.contains("open")) {
-        toggleSidebar();
-      }
+      if (document.getElementById("sidebar").classList.contains("open")) toggleSidebar();
     }
 
     function deleteSession(id) {
       sessions = sessions.filter(s => s.id !== id);
-      if (activeSessionId === id) {
-        activeSessionId = sessions.length ? sessions[0].id : null;
-      }
-      if (!sessions.length) {
-        createNewSession();
-        return;
-      }
+      activeSessionId = sessions.length ? sessions[0].id : null;
+      if (!sessions.length) { createNewSession(); return; }
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -733,6 +884,13 @@
     function loadSessionUI() {
       const current = getActiveSession();
       if (!current) return;
+      if (!current.files) {
+        current.files = { "index.html": current.code || DEFAULT_PROJECT["index.html"] };
+      }
+      if (!current.history) {
+        current.history = [JSON.parse(JSON.stringify(current.files))];
+        current.historyIdx = 0;
+      }
 
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
@@ -740,39 +898,49 @@
         const div = document.createElement("div");
         div.className = `msg ${m.role}`;
         div.innerText = m.text;
+        if (m.img) {
+          const im = document.createElement("img");
+          im.src = m.img;
+          div.appendChild(im);
+        }
         historyDiv.appendChild(div);
       });
       historyDiv.scrollTop = historyDiv.scrollHeight;
 
-      document.getElementById("code-editor").value = current.code;
-      renderSandboxPreview(current.code);
+      renderFileTree();
+      loadFileEditor();
+      renderSandboxPreview();
     }
 
-    function onCodeManualEdit() {
-      const current = getActiveSession();
-      if (!current) return;
-      current.code = document.getElementById("code-editor").value;
-      renderSandboxPreview(current.code);
-      saveSessions();
-    }
-
-    function renderSandboxPreview(rawHtml) {
+    // --- In-Memory Sandbox Assembly ---
+    function renderSandboxPreview() {
       document.getElementById("error-banner").style.display = "none";
-      const iframe = document.getElementById("preview-frame");
+      const current = getActiveSession();
+      if (!current || !current.files) return;
+
+      let html = current.files["index.html"] || "";
+
+      // Inline any linked virtual CSS and JS files directly for the iframe
+      Object.keys(current.files).forEach(fn => {
+        if (fn.endsWith(".css")) {
+          const cssRegex = new RegExp(`<link[^>]+href=["']${fn}["'][^>]*>`, "gi");
+          html = html.replace(cssRegex, `<style>/* ${fn} */\n${current.files[fn]}\n</style>`);
+        }
+        if (fn.endsWith(".js") && fn !== "index.html") {
+          const jsRegex = new RegExp(`<script[^>]+src=["']${fn}["'][^>]*><\\/script>`, "gi");
+          html = html.replace(jsRegex, `<script>/* ${fn} */\n${current.files[fn]}\n<\/script>`);
+        }
+      });
 
       const injectedHooks = `
         <script>
-          window.onerror = function(msg, url, line, col, error) {
+          window.onerror = function(msg, url, line) {
             window.parent.postMessage({ type: 'OMNI_RUNTIME_ERROR', error: msg + ' (Line ' + line + ')' }, '*');
             return false;
           };
-
           window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'OMNI_SET_INSPECT_MODE') {
-              window.__inspectActive = e.data.active;
-            }
+            if (e.data && e.data.type === 'OMNI_SET_INSPECT_MODE') window.__inspectActive = e.data.active;
           });
-
           let prevEl = null;
           document.addEventListener('mouseover', function(e) {
             if (!window.__inspectActive) return;
@@ -780,41 +948,35 @@
             prevEl = e.target;
             prevEl.style.outline = '2px dashed #6366f1';
           }, true);
-
           document.addEventListener('click', function(e) {
             if (!window.__inspectActive) return;
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             if (prevEl) prevEl.style.outline = '';
             const tag = e.target.tagName.toLowerCase();
             const id = e.target.id ? '#' + e.target.id : '';
             const cls = e.target.className ? '.' + String(e.target.className).trim().replace(/\\s+/g, '.') : '';
-            const snippet = e.target.outerHTML.slice(0, 180);
             window.parent.postMessage({ 
               type: 'OMNI_ELEMENT_INSPECTED', 
               selector: tag + id + cls,
-              outerHTML: snippet
+              outerHTML: e.target.outerHTML.slice(0, 180)
             }, '*');
           }, true);
         <\/script>
       `;
 
-      iframe.srcdoc = rawHtml + injectedHooks;
+      document.getElementById("preview-frame").srcdoc = html + injectedHooks;
     }
 
     window.addEventListener("message", (e) => {
       if (!e.data) return;
-
       if (e.data.type === "OMNI_RUNTIME_ERROR") {
         lastCapturedError = e.data.error;
-        const banner = document.getElementById("error-banner");
         document.getElementById("error-banner-text").innerText = `⚠️ ${lastCapturedError}`;
-        banner.style.display = "flex";
+        document.getElementById("error-banner").style.display = "flex";
       }
-
       if (e.data.type === "OMNI_ELEMENT_INSPECTED") {
         const input = document.getElementById("prompt-input");
-        input.value = `@element (${e.data.selector}):\n\`\`\`html\n${e.data.outerHTML}\n\`\`\`\nModify this element: `;
+        input.value = `@element (${e.data.selector}):\n\`\`\`html\n${e.data.outerHTML}\n\`\`\`\nModify this: `;
         toggleInspector(false);
         switchTab("chat");
         input.focus();
@@ -824,9 +986,7 @@
     function toggleInspector(forceState) {
       isInspectorActive = forceState !== undefined ? forceState : !isInspectorActive;
       const btn = document.getElementById("inspect-toggle-btn");
-      btn.classList.toggle("active", isInspectorActive);
-      btn.innerText = isInspectorActive ? "Cancel Inspect" : "🔍 Inspect Element";
-      
+      btn.style.background = isInspectorActive ? "var(--accent)" : "#252a36";
       const iframe = document.getElementById("preview-frame");
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage({ type: "OMNI_SET_INSPECT_MODE", active: isInspectorActive }, "*");
@@ -836,7 +996,7 @@
     function fixCurrentError() {
       if (!lastCapturedError) return;
       const promptInput = document.getElementById("prompt-input");
-      promptInput.value = `Fix this runtime console error occurring in the code:\n"${lastCapturedError}"`;
+      promptInput.value = `Fix this runtime console error occurring in ${activeFileName}:\n"${lastCapturedError}"`;
       switchTab("chat");
       sendMessage();
     }
@@ -846,25 +1006,21 @@
       pendingDiffCode = newCode;
       document.getElementById("diff-banner").style.display = "flex";
       document.getElementById("code-editor").value = newCode;
-      renderSandboxPreview(newCode);
       switchTab("code");
     }
 
     function acceptDiff() {
       const current = getActiveSession();
       if (!current || !pendingDiffCode) return;
-      current.code = pendingDiffCode;
-      saveSessions();
+      current.files[activeFileName] = pendingDiffCode;
+      captureSnapshot();
       pendingDiffCode = null;
       document.getElementById("diff-banner").style.display = "none";
-      renderSandboxPreview(current.code);
+      renderSandboxPreview();
     }
 
     function rejectDiff() {
-      const current = getActiveSession();
-      if (!current) return;
       document.getElementById("code-editor").value = preDiffSnapshot;
-      renderSandboxPreview(preDiffSnapshot);
       pendingDiffCode = null;
       document.getElementById("diff-banner").style.display = "none";
     }
@@ -872,37 +1028,25 @@
     function exportProject() {
       const current = getActiveSession();
       if (!current) return;
-      const blob = new Blob([current.code], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
+      const blob = new Blob([current.files["index.html"]], { type: "text/html;charset=utf-8" });
       const a = document.createElement("a");
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = (current.title ? current.title.replace(/[^a-z0-9]/gi, "_").toLowerCase() : "index") + ".html";
-      document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
     }
 
+    // --- Provider / Model Management ---
     function saveCurrentKey() {
       const provider = document.getElementById("provider-select").value;
-      const key = document.getElementById("api-key-input").value.trim();
-      localStorage.setItem(`omni_key_${provider}`, key);
+      localStorage.setItem(`omni_key_${provider}`, document.getElementById("api-key-input").value.trim());
     }
 
     function onProviderChange() {
       const provider = document.getElementById("provider-select").value;
       const keyInput = document.getElementById("api-key-input");
-      const linkEl = document.getElementById("get-key-link");
-      const select = document.getElementById("model-select");
-
       keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
-      linkEl.innerText = KEY_LINKS[provider].text;
-      linkEl.href = KEY_LINKS[provider].url;
-
-      select.innerHTML = '<option value="">(No models)</option>';
-      document.getElementById("status-indicator").classList.remove("active");
-      document.getElementById("status-text").innerText = "Key loaded. Click Connect.";
-
+      document.getElementById("get-key-link").innerText = KEY_LINKS[provider].text;
+      document.getElementById("get-key-link").href = KEY_LINKS[provider].url;
       if (keyInput.value) fetchModels();
     }
 
@@ -914,7 +1058,6 @@
       document.getElementById("view-" + name).classList.add("active");
     }
 
-    // Helper: Parse numerical version from GPT model strings (e.g., "gpt-5.6-turbo" -> 5.6, "gpt-6" -> 6.0)
     function extractGptVersion(id) {
       const match = id.match(/gpt-(\d+(?:\.\d+)?)/i);
       return match ? parseFloat(match[1]) : 0;
@@ -927,52 +1070,29 @@
       const statusText = document.getElementById("status-text");
       const statusDot = document.getElementById("status-indicator");
 
-      if (!key) return alert("Please enter an API key.");
+      if (!key) return;
       saveCurrentKey();
-
       statusText.innerText = "Discovering models...";
-      modelSelect.innerHTML = '<option value="">Loading...</option>';
 
       try {
         let models = [];
-        let modelVersionMap = {};
-
         if (provider === "gemini") {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
-
           data.models.forEach(m => {
-            const cleanId = m.name.replace("models/", "");
-            if (m.supportedGenerationMethods?.includes("generateContent")) {
-              models.push(cleanId);
-              modelVersionMap[cleanId] = m.displayName || m.version || "";
-            }
+            if (m.supportedGenerationMethods?.includes("generateContent")) models.push(m.name.replace("models/", ""));
           });
         } else if (provider === "openai") {
-          const res = await fetch("https://api.openai.com/v1/models", {
-            headers: { "Authorization": `Bearer ${key}` }
-          });
+          const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${key}` } });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
-
-          // Extract all gpt models and sort descending by numeric version
-          models = data.data
-            .map(m => m.id)
-            .filter(id => id.toLowerCase().includes("gpt"))
-            .sort((a, b) => {
-              const verA = extractGptVersion(a);
-              const verB = extractGptVersion(b);
-              if (verB !== verA) return verB - verA; // Highest version first
-              return b.localeCompare(a);
-            });
+          models = data.data.map(m => m.id).filter(id => id.toLowerCase().includes("gpt")).sort((a, b) => {
+            return extractGptVersion(b) - extractGptVersion(a);
+          });
         } else if (provider === "claude") {
           const res = await fetch("https://api.anthropic.com/v1/models", {
-            headers: {
-              "x-api-key": key,
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true"
-            }
+            headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
@@ -980,49 +1100,29 @@
         }
 
         modelSelect.innerHTML = "";
-        models = models.filter(m => !m.includes("-tts") && !m.includes("-clip") && !m.includes("lyria"));
-
         models.forEach(m => {
           const opt = document.createElement("option");
-          opt.value = m;
-          opt.textContent = m;
+          opt.value = m; opt.textContent = m;
           modelSelect.appendChild(opt);
         });
 
-        // Smart selector prioritization
-        let targetModel = null;
+        let target = models[0];
         if (provider === "gemini") {
-          targetModel = models.find(m => m === "gemini-pro-latest")
-                     || models.find(m => m.includes("pro-latest"))
-                     || models.find(m => m.includes("pro"))
-                     || models.find(m => m.includes("flash"))
-                     || models[0];
-        } else if (provider === "openai") {
-          // Grabs the largest parsed version found at the top of the sorted list
-          targetModel = models[0];
+          target = models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
         } else if (provider === "claude") {
-          // Keeps Claude Fable 5.1 target
-          targetModel = models.find(m => m.includes("fable-5.1") || m.includes("fable"))
-                     || models.find(m => m.includes("sonnet"))
-                     || models[0];
+          target = models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
         }
-
-        if (targetModel) modelSelect.value = targetModel;
+        if (target) modelSelect.value = target;
 
         statusDot.classList.add("active");
-        const extra = modelVersionMap[modelSelect.value];
-        statusText.innerText = extra && extra !== modelSelect.value 
-          ? `Connected: ${modelSelect.value} (${extra})`
-          : `Connected: ${modelSelect.value}`;
-
+        statusText.innerText = `Connected: ${modelSelect.value}`;
       } catch (err) {
-        modelSelect.innerHTML = '<option value="">(Error)</option>';
         statusDot.classList.remove("active");
-        statusText.innerText = "Error fetching models: " + err.message;
-        alert("Failed to connect: " + err.message);
+        statusText.innerText = "Error: " + err.message;
       }
     }
 
+    // --- Multimodal AI Dispatch ---
     async function sendMessage() {
       const promptInput = document.getElementById("prompt-input");
       const prompt = promptInput.value.trim();
@@ -1032,32 +1132,26 @@
       const current = getActiveSession();
       const customRules = localStorage.getItem("omni_cursorrules") || "";
 
-      if (!prompt) return;
-      if (!key || !model) return alert("Please connect your API key and select a model first.");
+      if (!prompt && !attachedImage) return;
+      if (!key || !model) return alert("Please connect an API key first.");
       if (!current) return;
 
-      if (!current.messages.length) {
-        current.title = prompt.slice(0, 24) + (prompt.length > 24 ? "..." : "");
-        renderSidebar();
-      }
-
-      current.messages.push({ role: "user", text: prompt });
-      appendChat("user", prompt);
+      const userMessageObj = { role: "user", text: prompt, img: attachedImage?.dataUrl || null };
+      current.messages.push(userMessageObj);
+      appendChat("user", prompt, attachedImage?.dataUrl);
       promptInput.value = "";
-      saveSessions();
 
-      const systemPrompt = `You are a frontend web development assistant.
-Project Rules (.cursorrules):
-${customRules}
+      const currentFilesContext = JSON.stringify(current.files, null, 2);
+      const systemPrompt = `You are a web development assistant.
+Project Rules: ${customRules}
+Active File: "${activeFileName}"
 
-You MUST output full, self-contained HTML (including CSS and JavaScript inside <style> and <script> tags).
-Return ONLY the raw HTML code block enclosed in triple backticks (\`\`\`html ... \`\`\`) with a brief explanation.
-Here is the current HTML code the user has in the editor right now:
-\`\`\`html
-${current.code}
-\`\`\``;
+All Project Files:
+${currentFilesContext}
 
-      appendChat("assistant", "Generating update...");
+Return ONLY the updated code for the active file ("${activeFileName}") enclosed in triple backticks (\`\`\`html, \`\`\`css, or \`\`\`javascript).`;
+
+      appendChat("assistant", "Thinking & coding...");
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
@@ -1065,35 +1159,44 @@ ${current.code}
         let reply = "";
 
         if (provider === "gemini") {
+          const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
+          if (attachedImage) {
+            parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
+          }
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: systemPrompt + "\n\nUser Request: " + prompt }] }]
-            })
+            body: JSON.stringify({ contents: [{ role: "user", parts }] })
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           reply = data.candidates[0].content.parts[0].text;
+
         } else if (provider === "openai") {
+          const content = [{ type: "text", text: prompt }];
+          if (attachedImage) {
+            content.push({ type: "image_url", image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` } });
+          }
           const res = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${key}`
-            },
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
             body: JSON.stringify({
               model: model,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: prompt }
-              ]
+              messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
             })
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           reply = data.choices[0].message.content;
+
         } else if (provider === "claude") {
+          const content = [{ type: "text", text: prompt }];
+          if (attachedImage) {
+            content.push({
+              type: "image",
+              source: { type: "base64", media_type: attachedImage.mimeType, data: attachedImage.base64 }
+            });
+          }
           const res = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
@@ -1106,7 +1209,7 @@ ${current.code}
               model: model,
               system: systemPrompt,
               max_tokens: 4096,
-              messages: [{ role: "user", content: prompt }]
+              messages: [{ role: "user", content }]
             })
           });
           const data = await res.json();
@@ -1114,10 +1217,11 @@ ${current.code}
           reply = data.content[0].text;
         }
 
+        clearAttachedImage();
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        const codeMatch = reply.match(/```html\s*([\s\S]*?)\s*```/) || reply.match(/```\s*([\s\S]*?)\s*```/);
+        const codeMatch = reply.match(/```[a-zA-Z]*\s*([\s\S]*?)\s*```/);
         if (codeMatch && codeMatch[1]) {
           promptDiffReview(codeMatch[1].trim());
         }
@@ -1128,11 +1232,16 @@ ${current.code}
       }
     }
 
-    function appendChat(role, text) {
+    function appendChat(role, text, img) {
       const history = document.getElementById("chat-history");
       const msg = document.createElement("div");
       msg.className = `msg ${role}`;
       msg.innerText = text;
+      if (img) {
+        const im = document.createElement("img");
+        im.src = img;
+        msg.appendChild(im);
+      }
       history.appendChild(msg);
       history.scrollTop = history.scrollHeight;
     }
