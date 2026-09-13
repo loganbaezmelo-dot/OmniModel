@@ -12,6 +12,7 @@
       --accent: #6366f1;
       --text: #f3f4f6;
       --muted: #9ca3af;
+      --danger: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -55,6 +56,12 @@
       cursor: pointer;
     }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .icon-btn {
+      padding: 8px 12px;
+      background: #252a36;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
     .status-row {
       display: flex;
       justify-content: space-between;
@@ -81,10 +88,76 @@
       text-decoration: none;
       font-weight: 500;
     }
-    .get-key-link:hover {
-      text-decoration: underline;
+
+    /* Sidebar Drawer */
+    #sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 99;
+      display: none;
     }
-    
+    #sidebar-overlay.open { display: block; }
+    #sidebar {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 280px;
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      z-index: 100;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      display: flex;
+      flex-direction: column;
+    }
+    #sidebar.open { transform: translateX(0); }
+    .sidebar-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .chat-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      border-radius: 6px;
+      background: #252a36;
+      cursor: pointer;
+      font-size: 13px;
+      border: 1px solid transparent;
+    }
+    .chat-item.active {
+      border-color: var(--accent);
+      background: #2e3447;
+    }
+    .chat-item-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .chat-del-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 16px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
     .nav-tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -187,8 +260,19 @@
 </head>
 <body>
 
+  <!-- Overlay & Sidebar -->
+  <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <strong>Saved Sessions</strong>
+      <button onclick="createNewSession()">+ New</button>
+    </div>
+    <div class="sidebar-list" id="sidebar-list"></div>
+  </aside>
+
   <header>
     <div class="top-bar">
+      <button class="icon-btn" onclick="toggleSidebar()">☰</button>
       <select id="provider-select" onchange="onProviderChange()">
         <option value="gemini">Gemini</option>
         <option value="openai">OpenAI</option>
@@ -196,7 +280,7 @@
       </select>
       <input type="password" id="api-key-input" placeholder="Enter API Key" oninput="saveCurrentKey()">
       <button onclick="fetchModels()">Connect</button>
-      <select id="model-select" style="max-width: 160px;">
+      <select id="model-select" style="max-width: 150px;">
         <option value="">(No models)</option>
       </select>
     </div>
@@ -225,7 +309,7 @@
     </div>
 
     <div id="view-code" class="view-panel">
-      <textarea id="code-editor" spellcheck="false" oninput="updatePreview()"></textarea>
+      <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
     <div id="view-preview" class="view-panel">
@@ -234,15 +318,121 @@
   </main>
 
   <script>
-    let currentCode = "<!DOCTYPE html>\n<html>\n<head>\n  <style>body { font-family: sans-serif; display: grid; place-content: center; height: 90vh; background: #fafafa; color: #222; text-align: center; }</style>\n</head>\n<body>\n  <h2>Ready to Build 🚀</h2>\n  <p>Connect an API key and ask the model to create something!</p>\n</body>\n</html>";
-
-    document.getElementById("code-editor").value = currentCode;
+    const DEFAULT_CODE = "<!DOCTYPE html>\n<html>\n<head>\n  <style>body { font-family: sans-serif; display: grid; place-content: center; height: 90vh; background: #fafafa; color: #222; text-align: center; }</style>\n</head>\n<body>\n  <h2>Ready to Build 🚀</h2>\n  <p>Connect an API key and ask the model to create something!</p>\n</body>\n</html>";
 
     const KEY_LINKS = {
       gemini: { text: "Get Gemini API Key ↗", url: "https://aistudio.google.com/app/apikey" },
       openai: { text: "Get OpenAI API Key ↗", url: "https://platform.openai.com/api-keys" },
       claude: { text: "Get Claude API Key ↗", url: "https://console.anthropic.com/settings/keys" }
     };
+
+    let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
+    let activeSessionId = localStorage.getItem("omni_active_session_id") || null;
+
+    function saveSessions() {
+      localStorage.setItem("omni_sessions", JSON.stringify(sessions));
+      localStorage.setItem("omni_active_session_id", activeSessionId);
+    }
+
+    function getActiveSession() {
+      return sessions.find(s => s.id === activeSessionId);
+    }
+
+    function toggleSidebar() {
+      document.getElementById("sidebar").classList.toggle("open");
+      document.getElementById("sidebar-overlay").classList.toggle("open");
+    }
+
+    function renderSidebar() {
+      const list = document.getElementById("sidebar-list");
+      list.innerHTML = "";
+      sessions.forEach(sess => {
+        const item = document.createElement("div");
+        item.className = `chat-item ${sess.id === activeSessionId ? "active" : ""}`;
+        item.onclick = () => switchSession(sess.id);
+
+        const title = document.createElement("span");
+        title.className = "chat-item-title";
+        title.innerText = sess.title || "Untitled Project";
+
+        const del = document.createElement("button");
+        del.className = "chat-del-btn";
+        del.innerText = "×";
+        del.onclick = (e) => {
+          e.stopPropagation();
+          deleteSession(sess.id);
+        };
+
+        item.appendChild(title);
+        item.appendChild(del);
+        list.appendChild(item);
+      });
+    }
+
+    function createNewSession() {
+      const newSession = {
+        id: "sess_" + Date.now(),
+        title: "New Session",
+        code: DEFAULT_CODE,
+        messages: []
+      };
+      sessions.unshift(newSession);
+      activeSessionId = newSession.id;
+      saveSessions();
+      loadSessionUI();
+      renderSidebar();
+      toggleSidebar();
+    }
+
+    function switchSession(id) {
+      activeSessionId = id;
+      saveSessions();
+      loadSessionUI();
+      renderSidebar();
+      toggleSidebar();
+    }
+
+    function deleteSession(id) {
+      sessions = sessions.filter(s => s.id !== id);
+      if (activeSessionId === id) {
+        activeSessionId = sessions.length ? sessions[0].id : null;
+      }
+      if (!sessions.length) {
+        createNewSession();
+        return;
+      }
+      saveSessions();
+      loadSessionUI();
+      renderSidebar();
+    }
+
+    function loadSessionUI() {
+      const current = getActiveSession();
+      if (!current) return;
+
+      // Render chat history
+      const historyDiv = document.getElementById("chat-history");
+      historyDiv.innerHTML = "";
+      current.messages.forEach(m => {
+        const div = document.createElement("div");
+        div.className = `msg ${m.role}`;
+        div.innerText = m.text;
+        historyDiv.appendChild(div);
+      });
+      historyDiv.scrollTop = historyDiv.scrollHeight;
+
+      // Render Code & Preview
+      document.getElementById("code-editor").value = current.code;
+      document.getElementById("preview-frame").srcdoc = current.code;
+    }
+
+    function onCodeManualEdit() {
+      const current = getActiveSession();
+      if (!current) return;
+      current.code = document.getElementById("code-editor").value;
+      document.getElementById("preview-frame").srcdoc = current.code;
+      saveSessions();
+    }
 
     function saveCurrentKey() {
       const provider = document.getElementById("provider-select").value;
@@ -257,7 +447,6 @@
       const select = document.getElementById("model-select");
 
       keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
-
       linkEl.innerText = KEY_LINKS[provider].text;
       linkEl.href = KEY_LINKS[provider].url;
 
@@ -276,13 +465,10 @@
       });
       document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
       document.getElementById("view-" + name).classList.add("active");
-      if (name === "preview") updatePreview();
-    }
-
-    function updatePreview() {
-      currentCode = document.getElementById("code-editor").value;
-      const iframe = document.getElementById("preview-frame");
-      iframe.srcdoc = currentCode;
+      if (name === "preview") {
+        const current = getActiveSession();
+        if (current) document.getElementById("preview-frame").srcdoc = current.code;
+      }
     }
 
     async function fetchModels() {
@@ -338,8 +524,6 @@
         }
 
         modelSelect.innerHTML = "";
-
-        // Strip non-chat audio/image models
         models = models.filter(m => !m.includes("-tts") && !m.includes("-clip") && !m.includes("lyria"));
 
         models.forEach(m => {
@@ -349,18 +533,14 @@
           modelSelect.appendChild(opt);
         });
 
-        // Snap to pro-latest
-        const targetModel = models.find(m => m === "gemini-pro-latest") 
-                         || models.find(m => m.includes("pro-latest"))
-                         || models.find(m => m.includes("pro"));
+        const targetModel = models.find(m => m === "gemini-2.5-flash")
+                         || models.find(m => m === "gemini-flash-latest")
+                         || models.find(m => m.includes("flash"))
+                         || models[0];
 
-        if (targetModel) {
-          modelSelect.value = targetModel;
-        }
+        if (targetModel) modelSelect.value = targetModel;
 
         statusDot.classList.add("active");
-        
-        // Show metadata display name instantly
         const extra = modelVersionMap[modelSelect.value];
         statusText.innerText = extra && extra !== modelSelect.value 
           ? `Connected: ${modelSelect.value} (${extra})`
@@ -380,19 +560,29 @@
       const key = document.getElementById("api-key-input").value.trim();
       const provider = document.getElementById("provider-select").value;
       const model = document.getElementById("model-select").value;
+      const current = getActiveSession();
 
       if (!prompt) return;
       if (!key || !model) return alert("Please connect your API key and select a model first.");
+      if (!current) return;
 
+      // Update session title on first user prompt
+      if (!current.messages.length) {
+        current.title = prompt.slice(0, 24) + (prompt.length > 24 ? "..." : "");
+        renderSidebar();
+      }
+
+      current.messages.push({ role: "user", text: prompt });
       appendChat("user", prompt);
       promptInput.value = "";
+      saveSessions();
 
       const systemPrompt = `You are a frontend web development assistant.
 You MUST output full, self-contained HTML (including CSS and JavaScript inside <style> and <script> tags).
 Return ONLY the raw HTML code block enclosed in triple backticks (\`\`\`html ... \`\`\`) with a brief explanation.
 Here is the current HTML code the user has in the editor right now:
 \`\`\`html
-${currentCode}
+${current.code}
 \`\`\``;
 
       appendChat("assistant", "Generating update...");
@@ -407,9 +597,7 @@ ${currentCode}
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [
-                { role: "user", parts: [{ text: systemPrompt + "\n\nUser Request: " + prompt }] }
-              ]
+              contents: [{ role: "user", parts: [{ text: systemPrompt + "\n\nUser Request: " + prompt }] }]
             })
           });
           const data = await res.json();
@@ -455,13 +643,15 @@ ${currentCode}
         }
 
         loadingMsg.innerText = reply;
+        current.messages.push({ role: "assistant", text: reply });
 
         const codeMatch = reply.match(/```html\s*([\s\S]*?)\s*```/) || reply.match(/```\s*([\s\S]*?)\s*```/);
         if (codeMatch && codeMatch[1]) {
-          currentCode = codeMatch[1].trim();
-          document.getElementById("code-editor").value = currentCode;
-          updatePreview();
+          current.code = codeMatch[1].trim();
+          document.getElementById("code-editor").value = current.code;
+          document.getElementById("preview-frame").srcdoc = current.code;
         }
+        saveSessions();
 
       } catch (err) {
         loadingMsg.innerText = "Error: " + err.message;
@@ -477,8 +667,16 @@ ${currentCode}
       history.scrollTop = history.scrollHeight;
     }
 
+    // Initialize initial session if none exist
+    if (!sessions.length) {
+      createNewSession();
+    } else {
+      if (!activeSessionId) activeSessionId = sessions[0].id;
+      loadSessionUI();
+      renderSidebar();
+    }
+
     onProviderChange();
-    updatePreview();
   </script>
 </body>
 </html>
