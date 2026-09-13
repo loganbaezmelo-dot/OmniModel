@@ -46,7 +46,7 @@
       font-size: 14px;
       outline: none;
     }
-    input[type="password"] { flex: 1; min-width: 140px; }
+    input[type="password"] { flex: 1; min-width: 130px; }
     button {
       background: var(--accent);
       color: #fff;
@@ -55,9 +55,16 @@
       cursor: pointer;
     }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .status {
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       font-size: 12px;
       color: var(--muted);
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .status {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -69,6 +76,14 @@
       background: #ef4444;
     }
     .status-dot.active { background: #10b981; }
+    .get-key-link {
+      color: #818cf8;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .get-key-link:hover {
+      text-decoration: underline;
+    }
     
     .nav-tabs {
       display: flex;
@@ -103,7 +118,6 @@
     }
     .view-panel.active { display: flex; }
 
-    /* Chat View */
     #chat-history {
       flex: 1;
       overflow-y: auto;
@@ -150,7 +164,6 @@
       outline: none;
     }
 
-    /* Code View */
     #code-editor {
       width: 100%;
       height: 100%;
@@ -164,7 +177,6 @@
       outline: none;
     }
 
-    /* Preview View */
     #preview-frame {
       width: 100%;
       height: 100%;
@@ -182,13 +194,18 @@
         <option value="openai">OpenAI</option>
         <option value="claude">Claude</option>
       </select>
-      <input type="password" id="api-key-input" placeholder="Enter API Key">
+      <input type="password" id="api-key-input" placeholder="Enter API Key" oninput="saveCurrentKey()">
       <button onclick="fetchModels()">Connect</button>
-      <select id="model-select" style="max-width: 160px;"></select>
+      <select id="model-select" style="max-width: 160px;">
+        <option value="">(No models)</option>
+      </select>
     </div>
-    <div class="status">
-      <span id="status-indicator" class="status-dot"></span>
-      <span id="status-text">Disconnected</span>
+    <div class="status-row">
+      <div class="status">
+        <span id="status-indicator" class="status-dot"></span>
+        <span id="status-text">Disconnected</span>
+      </div>
+      <a id="get-key-link" class="get-key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Get Gemini API Key ↗</a>
     </div>
   </header>
 
@@ -199,7 +216,6 @@
   </nav>
 
   <main>
-    <!-- Chat View -->
     <div id="view-chat" class="view-panel active">
       <div id="chat-history"></div>
       <div class="input-row">
@@ -208,12 +224,10 @@
       </div>
     </div>
 
-    <!-- Code View -->
     <div id="view-code" class="view-panel">
       <textarea id="code-editor" spellcheck="false" oninput="updatePreview()"></textarea>
     </div>
 
-    <!-- Preview View -->
     <div id="view-preview" class="view-panel">
       <iframe id="preview-frame"></iframe>
     </div>
@@ -223,6 +237,41 @@
     let currentCode = "<!DOCTYPE html>\n<html>\n<head>\n  <style>body { font-family: sans-serif; display: grid; place-content: center; height: 90vh; background: #fafafa; color: #222; text-align: center; }</style>\n</head>\n<body>\n  <h2>Ready to Build 🚀</h2>\n  <p>Connect an API key and ask the model to create something!</p>\n</body>\n</html>";
 
     document.getElementById("code-editor").value = currentCode;
+
+    const KEY_LINKS = {
+      gemini: { text: "Get Gemini API Key ↗", url: "https://aistudio.google.com/app/apikey" },
+      openai: { text: "Get OpenAI API Key ↗", url: "https://platform.openai.com/api-keys" },
+      claude: { text: "Get Claude API Key ↗", url: "https://console.anthropic.com/settings/keys" }
+    };
+
+    function saveCurrentKey() {
+      const provider = document.getElementById("provider-select").value;
+      const key = document.getElementById("api-key-input").value.trim();
+      localStorage.setItem(`omni_key_${provider}`, key);
+    }
+
+    function onProviderChange() {
+      const provider = document.getElementById("provider-select").value;
+      const keyInput = document.getElementById("api-key-input");
+      const linkEl = document.getElementById("get-key-link");
+      const select = document.getElementById("model-select");
+
+      // Load stored key for chosen provider
+      keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
+
+      // Update helper link
+      linkEl.innerText = KEY_LINKS[provider].text;
+      linkEl.href = KEY_LINKS[provider].url;
+
+      // Reset models
+      select.innerHTML = '<option value="">(No models)</option>';
+      document.getElementById("status-indicator").classList.remove("active");
+      document.getElementById("status-text").innerText = "Key loaded. Click Connect.";
+
+      if (keyInput.value) {
+        fetchModels();
+      }
+    }
 
     function switchTab(name) {
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
@@ -239,13 +288,6 @@
       iframe.srcdoc = currentCode;
     }
 
-    function onProviderChange() {
-      const select = document.getElementById("model-select");
-      select.innerHTML = "";
-      document.getElementById("status-indicator").classList.remove("active");
-      document.getElementById("status-text").innerText = "Key needed for this provider";
-    }
-
     async function fetchModels() {
       const provider = document.getElementById("provider-select").value;
       const key = document.getElementById("api-key-input").value.trim();
@@ -254,9 +296,10 @@
       const statusDot = document.getElementById("status-indicator");
 
       if (!key) return alert("Please enter an API key.");
+      saveCurrentKey();
 
       statusText.innerText = "Discovering models...";
-      modelSelect.innerHTML = "";
+      modelSelect.innerHTML = '<option value="">Loading...</option>';
 
       try {
         let models = [];
@@ -291,6 +334,7 @@
           models = data.data ? data.data.map(m => m.id) : ["claude-3-5-sonnet-latest", "claude-3-opus-latest"];
         }
 
+        modelSelect.innerHTML = "";
         models.forEach(m => {
           const opt = document.createElement("option");
           opt.value = m;
@@ -301,6 +345,7 @@
         statusDot.classList.add("active");
         statusText.innerText = `Connected: ${modelSelect.value}`;
       } catch (err) {
+        modelSelect.innerHTML = '<option value="">(Error)</option>';
         statusDot.classList.remove("active");
         statusText.innerText = "Error fetching models: " + err.message;
         alert("Failed to connect: " + err.message);
@@ -389,7 +434,6 @@ ${currentCode}
 
         loadingMsg.innerText = reply;
 
-        // Extract code block if provided
         const codeMatch = reply.match(/```html\s*([\s\S]*?)\s*```/) || reply.match(/```\s*([\s\S]*?)\s*```/);
         if (codeMatch && codeMatch[1]) {
           currentCode = codeMatch[1].trim();
@@ -411,7 +455,8 @@ ${currentCode}
       history.scrollTop = history.scrollHeight;
     }
 
-    // Initial render
+    // Init keys on first load
+    onProviderChange();
     updatePreview();
   </script>
 </body>
