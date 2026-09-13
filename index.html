@@ -729,34 +729,39 @@
     async function pushToGitHub() {
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
-      const path = document.getElementById("gh-path").value.trim() || activeFileName;
+      
+      // Pin deployment to active editor file to prevent cross-file overwrites
+      const targetPath = activeFileName || document.getElementById("gh-path").value.trim() || "index.html";
+      document.getElementById("gh-path").value = targetPath;
+      saveGhConfig();
+
       const current = getActiveSession();
+      if (!token || !repo || !targetPath) return alert("Please enter GitHub Token, Repo, and File Path.");
+      if (!current || !current.files[targetPath]) return alert(`No content found for ${targetPath}`);
 
-      if (!token || !repo || !path) return alert("Please enter GitHub Token, Repo, and File Path.");
-      if (!current) return;
-
-      const commitMsg = window.prompt("Commit Message:", `Update ${path} via Omni Studio`);
+      const commitMsg = window.prompt("Commit Message:", `Update ${targetPath} via Omni Studio`);
       if (!commitMsg) return;
 
       const statusText = document.getElementById("status-text");
-      statusText.innerText = "Pushing commit...";
+      statusText.innerText = `Pushing ${targetPath}...`;
 
       try {
-        if (!currentFileSha) {
-          const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
-            headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
-          });
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            currentFileSha = checkData.sha;
-          }
+        // Query target file SHA directly before committing
+        let targetSha = null;
+        const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${targetPath}`, {
+          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          targetSha = checkData.sha;
         }
 
-        const encodedContent = btoa(unescape(encodeURIComponent(current.files[activeFileName] || "")));
+        const rawContent = current.files[targetPath] || "";
+        const encodedContent = btoa(unescape(encodeURIComponent(rawContent)));
         const bodyPayload = { message: commitMsg, content: encodedContent };
-        if (currentFileSha) bodyPayload.sha = currentFileSha;
+        if (targetSha) bodyPayload.sha = targetSha;
 
-        const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${targetPath}`, {
           method: "PUT",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -771,7 +776,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${path} to ${repo}!`);
+        alert(`Successfully pushed ${targetPath} to ${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -937,7 +942,7 @@
       document.getElementById("preview-frame").srcdoc = html + injectedHooks;
     }
 
-    // --- Autonomous Verification Routine ---
+    // --- Autonomous Smoke Test & Verification Routine ---
     function triggerAutonomousVerification() {
       const banner = document.getElementById("diff-banner");
       banner.style.display = "none";
@@ -1310,18 +1315,18 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
         if (codeMatch && codeMatch[1]) {
           const generatedCode = codeMatch[1].trim();
 
-          // 1. History rollback snapshot
+          // Snapshot state before writing generated buffer
           captureSnapshot();
 
-          // 2. Auto-load code into active file & editor
+          // Sync editor buffer and project memory
           current.files[activeFileName] = generatedCode;
           document.getElementById("code-editor").value = generatedCode;
           saveSessions();
 
-          // 3. Mount into live sandbox
+          // Recompile sandboxed iframe
           renderSandboxPreview();
 
-          // 4. Trigger autonomous sandbox check & 1-tap push
+          // Run smoke test & prepare deploy prompt
           triggerAutonomousVerification();
         }
         saveSessions();
