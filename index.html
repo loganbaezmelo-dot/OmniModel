@@ -592,6 +592,8 @@
     let attachedImage = null;
     let speechRecognizer = null;
     let isRecording = false;
+    let silenceTimer = null;
+    let finalVoiceBuffer = "";
     let isVoiceAutoSend = localStorage.getItem("omni_voice_autosend") === "true";
     let consoleLogCount = 0;
 
@@ -709,31 +711,75 @@
       const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!Speech) return alert("Speech recognition not supported in this browser.");
       const btn = document.getElementById("voice-btn");
+      
       if (isRecording) {
-        speechRecognizer.stop();
+        if (silenceTimer) clearTimeout(silenceTimer);
+        if (speechRecognizer) speechRecognizer.stop();
         return;
       }
+
       speechRecognizer = new Speech();
-      speechRecognizer.continuous = false;
-      speechRecognizer.interimResults = false;
+      speechRecognizer.continuous = true;
+      speechRecognizer.interimResults = true;
+      speechRecognizer.lang = "en-US";
+
+      const promptInput = document.getElementById("prompt-input");
+      const basePrompt = promptInput.value.trim();
+      finalVoiceBuffer = "";
+
       speechRecognizer.onstart = () => {
         isRecording = true;
         btn.classList.add("recording");
       };
+
       speechRecognizer.onresult = (evt) => {
-        const transcript = evt.results[0][0].transcript;
-        const input = document.getElementById("prompt-input");
-        input.value = (input.value ? input.value + " " : "") + transcript;
-        
-        if (isVoiceAutoSend && transcript.trim().length > 0) {
-          setTimeout(() => sendMessage(), 300);
+        let interimText = "";
+        let finalSegment = "";
+
+        for (let i = evt.resultIndex; i < evt.results.length; ++i) {
+          if (evt.results[i].isFinal) {
+            finalSegment += evt.results[i][0].transcript;
+          } else {
+            interimText += evt.results[i][0].transcript;
+          }
+        }
+
+        if (finalSegment) {
+          finalVoiceBuffer += (finalVoiceBuffer ? " " : "") + finalSegment.trim();
+        }
+
+        const currentSpoken = (finalVoiceBuffer + " " + interimText).trim();
+        promptInput.value = basePrompt ? `${basePrompt} ${currentSpoken}` : currentSpoken;
+
+        // Reset silence detection timer
+        if (silenceTimer) clearTimeout(silenceTimer);
+
+        if (isVoiceAutoSend && currentSpoken.length > 0) {
+          // If silence lasts 1.2s, finish and dispatch
+          silenceTimer = setTimeout(() => {
+            if (speechRecognizer && isRecording) {
+              speechRecognizer.stop();
+            }
+          }, 1200);
         }
       };
-      speechRecognizer.onerror = (e) => console.error("Speech Error:", e);
+
+      speechRecognizer.onerror = (e) => {
+        console.error("Speech Error:", e);
+        if (silenceTimer) clearTimeout(silenceTimer);
+      };
+
       speechRecognizer.onend = () => {
         isRecording = false;
         btn.classList.remove("recording");
+        if (silenceTimer) clearTimeout(silenceTimer);
+
+        // Immediate dispatch on silence completion
+        if (isVoiceAutoSend && promptInput.value.trim().length > 0) {
+          sendMessage();
+        }
       };
+
       speechRecognizer.start();
     }
 
