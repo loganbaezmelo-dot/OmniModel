@@ -403,7 +403,7 @@
   <header>
     <div class="top-bar">
       <button class="icon-btn" onclick="toggleSidebar()">☰</button>
-      <select id="provider-select" onchange="onProviderChange()">
+      <select id="provider-select" onchange="onUserChangeProvider()">
         <option value="gemini">Gemini</option>
         <option value="openai">OpenAI</option>
         <option value="claude">Claude</option>
@@ -412,7 +412,7 @@
       </select>
       <input type="password" id="api-key-input" placeholder="Enter API Key" oninput="saveCurrentKey()">
       <button onclick="fetchModels()">Connect</button>
-      <select id="model-select" style="max-width: 170px;">
+      <select id="model-select" style="max-width: 170px;" onchange="onUserChangeModel()">
         <option value="">(No models)</option>
       </select>
       <button class="export-btn" onclick="exportProject()">Export ⤓</button>
@@ -746,7 +746,6 @@
       statusText.innerText = `Pushing ${targetPath}...`;
 
       try {
-        // Query target file SHA directly before committing
         let targetSha = null;
         const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${targetPath}`, {
           headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
@@ -831,7 +830,9 @@
         files: JSON.parse(JSON.stringify(DEFAULT_PROJECT)),
         history: [JSON.parse(JSON.stringify(DEFAULT_PROJECT))],
         historyIdx: 0,
-        messages: []
+        messages: [],
+        selectedProvider: "gemini", // Clean default for new chat
+        selectedModel: ""
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
@@ -860,6 +861,24 @@
       renderSidebar();
     }
 
+    function onUserChangeProvider() {
+      const current = getActiveSession();
+      if (current) {
+        current.selectedProvider = document.getElementById("provider-select").value;
+        current.selectedModel = "";
+        saveSessions();
+      }
+      onProviderChange();
+    }
+
+    function onUserChangeModel() {
+      const current = getActiveSession();
+      if (current) {
+        current.selectedModel = document.getElementById("model-select").value;
+        saveSessions();
+      }
+    }
+
     function loadSessionUI() {
       const current = getActiveSession();
       if (!current) return;
@@ -867,6 +886,13 @@
       if (!current.history) {
         current.history = [JSON.parse(JSON.stringify(current.files))];
         current.historyIdx = 0;
+      }
+
+      // Restore the specific provider & model selected for this chat
+      if (current.selectedProvider) {
+        document.getElementById("provider-select").value = current.selectedProvider;
+      } else {
+        document.getElementById("provider-select").value = "gemini";
       }
 
       const historyDiv = document.getElementById("chat-history");
@@ -887,6 +913,7 @@
       renderFileTree();
       loadFileEditor();
       renderSandboxPreview();
+      onProviderChange(current.selectedModel);
     }
 
     function renderSandboxPreview() {
@@ -951,7 +978,6 @@
       const repo = localStorage.getItem("omni_gh_repo");
       lastCapturedError = null;
 
-      // Allow 1 second for DOM mounting and script execution
       setTimeout(() => {
         if (lastCapturedError) {
           console.warn("Autonomous verification flagged runtime error:", lastCapturedError);
@@ -1022,13 +1048,13 @@
       localStorage.setItem(`omni_key_${provider}`, document.getElementById("api-key-input").value.trim());
     }
 
-    function onProviderChange() {
+    function onProviderChange(preferredModel = null) {
       const provider = document.getElementById("provider-select").value;
       const keyInput = document.getElementById("api-key-input");
       keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
       document.getElementById("get-key-link").innerText = KEY_LINKS[provider].text;
       document.getElementById("get-key-link").href = KEY_LINKS[provider].url;
-      if (keyInput.value) fetchModels();
+      if (keyInput.value) fetchModels(preferredModel);
     }
 
     function switchTab(name) {
@@ -1044,12 +1070,13 @@
       return match ? parseFloat(match[1]) : 0;
     }
 
-    async function fetchModels() {
+    async function fetchModels(preferredModel = null) {
       const provider = document.getElementById("provider-select").value;
       const key = document.getElementById("api-key-input").value.trim();
       const modelSelect = document.getElementById("model-select");
       const statusText = document.getElementById("status-text");
       const statusDot = document.getElementById("status-indicator");
+      const current = getActiveSession();
 
       if (!key) return;
       saveCurrentKey();
@@ -1072,7 +1099,7 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
+          const target = preferredModel || models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
@@ -1088,7 +1115,8 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          if (models[0]) modelSelect.value = models[0];
+          const target = preferredModel || models[0];
+          if (target) modelSelect.value = target;
 
         } else if (provider === "claude") {
           const res = await fetch("https://api.anthropic.com/v1/models", {
@@ -1103,7 +1131,7 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
+          const target = preferredModel || models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "openrouter") {
@@ -1156,6 +1184,7 @@
           });
 
           const defaultTarget = 
+            preferredModel ||
             data.data.find(m => m.id.includes("deepseek-v4") || m.id.includes("deepseek-r1") || m.id.includes("deepseek-chat"))?.id ||
             data.data.find(m => m.id.includes("qwen") || m.id.includes("llama"))?.id ||
             modelSelect.querySelector("option")?.value;
@@ -1181,8 +1210,15 @@
             modelSelect.appendChild(opt);
           });
 
-          const target = models.find(m => m.includes("llama-3.3-70b")) || models[0];
+          const target = preferredModel || models.find(m => m.includes("llama-3.3-70b")) || models[0];
           if (target) modelSelect.value = target;
+        }
+
+        // Save selected model into session memory
+        if (current) {
+          current.selectedModel = modelSelect.value;
+          current.selectedProvider = provider;
+          saveSessions();
         }
 
         statusDot.classList.add("active");
@@ -1314,21 +1350,13 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
         if (codeMatch && codeMatch[1]) {
           const generatedCode = codeMatch[1].trim();
 
-          // 1. Snapshot state before applying code
           captureSnapshot();
-
-          // 2. Sync editor buffer and project virtual files
           current.files[activeFileName] = generatedCode;
           document.getElementById("code-editor").value = generatedCode;
           saveSessions();
 
-          // 3. Recompile live sandbox iframe
           renderSandboxPreview();
-
-          // 4. Instantly teleport straight to the live preview tab
           switchTab("preview");
-
-          // 5. Run autonomous smoke test & arm the GitHub push banner
           triggerAutonomousVerification();
         }
         saveSessions();
@@ -1362,8 +1390,6 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
       loadSessionUI();
       renderSidebar();
     }
-
-    onProviderChange();
   </script>
 </body>
 </html>
