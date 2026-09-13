@@ -730,7 +730,7 @@
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
       
-      // Pin deployment to active editor file to prevent cross-file overwrites
+      // Pin target directly to active editor file to prevent cross-file overwrites
       const targetPath = activeFileName || document.getElementById("gh-path").value.trim() || "index.html";
       document.getElementById("gh-path").value = targetPath;
       saveGhConfig();
@@ -942,7 +942,7 @@
       document.getElementById("preview-frame").srcdoc = html + injectedHooks;
     }
 
-    // --- Autonomous Smoke Test & Verification Routine ---
+    // --- Autonomous Verification Routine ---
     function triggerAutonomousVerification() {
       const banner = document.getElementById("diff-banner");
       banner.style.display = "none";
@@ -968,7 +968,6 @@
               <button class="btn-discard" onclick="document.getElementById('diff-banner').style.display='none'">Dismiss</button>
             </div>
           `;
-          switchTab("preview");
         }
       }, 1000);
     }
@@ -1315,18 +1314,21 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
         if (codeMatch && codeMatch[1]) {
           const generatedCode = codeMatch[1].trim();
 
-          // Snapshot state before writing generated buffer
+          // 1. Snapshot state before applying code
           captureSnapshot();
 
-          // Sync editor buffer and project memory
+          // 2. Sync editor buffer and project virtual files
           current.files[activeFileName] = generatedCode;
           document.getElementById("code-editor").value = generatedCode;
           saveSessions();
 
-          // Recompile sandboxed iframe
+          // 3. Recompile live sandbox iframe
           renderSandboxPreview();
 
-          // Run smoke test & prepare deploy prompt
+          // 4. Instantly teleport straight to the live preview tab
+          switchTab("preview");
+
+          // 5. Run autonomous smoke test & arm the GitHub push banner
           triggerAutonomousVerification();
         }
         saveSessions();
