@@ -300,14 +300,20 @@
 
       try {
         let models = [];
+        let modelVersionMap = {};
 
         if (provider === "gemini") {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
-          models = data.models
-            .filter(m => m.supportedGenerationMethods?.includes("generateContent"))
-            .map(m => m.name.replace("models/", ""));
+
+          data.models.forEach(m => {
+            const cleanId = m.name.replace("models/", "");
+            if (m.supportedGenerationMethods?.includes("generateContent")) {
+              models.push(cleanId);
+              modelVersionMap[cleanId] = m.displayName || m.version || "";
+            }
+          });
         } else if (provider === "openai") {
           const res = await fetch("https://api.openai.com/v1/models", {
             headers: { "Authorization": `Bearer ${key}` }
@@ -353,28 +359,13 @@
         }
 
         statusDot.classList.add("active");
-        statusText.innerText = `Connected: ${modelSelect.value}`;
+        
+        // Show metadata display name instantly
+        const extra = modelVersionMap[modelSelect.value];
+        statusText.innerText = extra && extra !== modelSelect.value 
+          ? `Connected: ${modelSelect.value} (${extra})`
+          : `Connected: ${modelSelect.value}`;
 
-        // Unmask the underlying version behind the alias
-        if (provider === "gemini" && modelSelect.value.includes("latest")) {
-          statusText.innerText = `Resolving exact ${modelSelect.value} version...`;
-          try {
-            const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelSelect.value}:generateContent?key=${key}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ role: "user", parts: [{ text: "What exact Gemini model version, release, or checkpoint are you? Answer in 5 words or less." }] }]
-              })
-            });
-            const checkData = await checkRes.json();
-            const realVer = checkData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (realVer) {
-              statusText.innerText = `Connected: ${modelSelect.value} (${realVer})`;
-            }
-          } catch (e) {
-            statusText.innerText = `Connected: ${modelSelect.value}`;
-          }
-        }
       } catch (err) {
         modelSelect.innerHTML = '<option value="">(Error)</option>';
         statusDot.classList.remove("active");
