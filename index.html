@@ -25,8 +25,6 @@
       height: 100dvh;
       overflow: hidden;
     }
-    
-    /* Studio Header */
     header {
       padding: 10px 14px;
       background: var(--card);
@@ -75,7 +73,6 @@
     .status-dot.offline { background: #ef4444; animation: pulse 1s infinite alternate; }
     .get-key-link { color: #818cf8; text-decoration: none; font-weight: 500; }
 
-    /* Navigation Tabs */
     .nav-tabs { display: flex; border-bottom: 1px solid var(--border); background: #151821; }
     .tab-btn {
       flex: 1;
@@ -88,13 +85,11 @@
     }
     .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 
-    /* Hide outer UI chrome when in full-screen preview */
     body.immersive-preview header,
     body.immersive-preview .nav-tabs {
       display: none !important;
     }
 
-    /* Workspace Panels */
     main { flex: 1; position: relative; overflow: hidden; }
     .view-panel { position: absolute; inset: 0; display: none; flex-direction: column; }
     .view-panel.active { display: flex; }
@@ -113,11 +108,51 @@
       align-items: center;
     }
 
-    /* Chat UI */
+    /* Agent Plan Tracker Card */
+    #agent-plan-banner {
+      display: none;
+      background: #131722;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      font-size: 12px;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .plan-title {
+      font-weight: bold;
+      color: #818cf8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .plan-step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 6px;
+    }
+    .plan-step-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+    }
+    .plan-step-item.active { color: #38bdf8; font-weight: 600; }
+    .plan-step-item.done { color: var(--success); text-decoration: line-through; opacity: 0.7; }
+
     #chat-history { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
     .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
     .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
     .msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
+    .msg.system-agent {
+      align-self: center;
+      max-width: 95%;
+      background: #151d30;
+      border: 1px dashed #4f46e5;
+      color: #93c5fd;
+      font-family: monospace;
+      font-size: 12px;
+    }
     .msg img { max-width: 100%; border-radius: 6px; margin-top: 6px; }
 
     .image-preview-bar {
@@ -157,7 +192,6 @@
     .media-btn.auto-send-active { border-color: var(--success); color: var(--success); }
     @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
 
-    /* Code View */
     .file-tree-bar {
       display: flex;
       align-items: center;
@@ -196,7 +230,6 @@
       outline: none;
     }
 
-    /* Immersive Canvas Workspace */
     #view-preview {
       position: absolute;
       inset: 0;
@@ -212,7 +245,6 @@
       background: #ffffff;
     }
 
-    /* Floating Top Exit & Actions Pill */
     .preview-floating-bar {
       position: absolute;
       top: 10px;
@@ -246,7 +278,6 @@
       box-shadow: 0 0 8px rgba(99,102,241,0.5);
     }
 
-    /* Floating Banners Overlay */
     .floating-banner-container {
       position: absolute;
       top: 52px;
@@ -284,7 +315,6 @@
     }
     #error-banner button { background: var(--danger); padding: 4px 8px; font-size: 11px; }
 
-    /* Floating Mini-Console Modal */
     #console-modal {
       position: absolute;
       bottom: 12px;
@@ -327,7 +357,6 @@
     .log-item.warn { color: #fbbf24; }
     .log-item.error { color: #f87171; }
 
-    /* Sidebar Drawer & Modals */
     #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; display: none; }
     #sidebar-overlay.open { display: block; }
     #sidebar {
@@ -492,12 +521,19 @@
     <!-- View: Chat -->
     <div id="view-chat" class="view-panel active">
       <div class="panel-header">
-        <span>AI Assistant</span>
+        <span>Autonomous Agent</span>
         <div style="display:flex; gap:6px;">
           <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="undoSnapshot()">↩ Undo</button>
           <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="redoSnapshot()">↪ Redo</button>
         </div>
       </div>
+
+      <!-- Autonomous Step Planner Banner -->
+      <div id="agent-plan-banner">
+        <span class="plan-title">⚡ Agent Plan Active</span>
+        <div class="plan-step-list" id="agent-plan-steps"></div>
+      </div>
+
       <div id="chat-history"></div>
       
       <div id="image-preview-bar" class="image-preview-bar">
@@ -510,7 +546,7 @@
         <input type="file" id="file-uploader" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
         <button class="media-btn" title="Attach wireframe or UI screenshot" onclick="document.getElementById('file-uploader').click()">📎</button>
         <button id="voice-btn" class="media-btn auto-send-active" title="Voice Auto-Send: Active ⚡" onclick="toggleVoiceInput()">🎙️</button>
-        <textarea id="prompt-input" placeholder="Prompt AI to code, edit, or fix..."></textarea>
+        <textarea id="prompt-input" placeholder="Prompt AI to plan, create files, or inject CDNs..."></textarea>
         <button id="send-btn" onclick="sendMessage()">Send</button>
       </div>
     </div>
@@ -525,9 +561,8 @@
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
-    <!-- View: Live Preview Canvas (Full screen immersive on mobile) -->
+    <!-- View: Live Preview Canvas -->
     <div id="view-preview" class="view-panel">
-      <!-- Floating Pill Controls at Top of Canvas -->
       <div class="preview-floating-bar">
         <button class="primary" onclick="switchTab('chat')">← Chat</button>
         <button onclick="switchTab('code')">Files</button>
@@ -535,7 +570,6 @@
         <button onclick="toggleConsoleModal()"><span id="console-badge">⚡ Logs</span></button>
       </div>
 
-      <!-- Floating Banners Overlays -->
       <div class="floating-banner-container">
         <div id="diff-banner"></div>
         <div id="error-banner">
@@ -546,7 +580,6 @@
 
       <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
 
-      <!-- Floating Mini Console Modal -->
       <div id="console-modal">
         <div class="console-header">
           <span id="console-title">Sandbox Console (0)</span>
@@ -562,7 +595,7 @@
 
   <script>
     const DEFAULT_PROJECT = {
-      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Full screen canvas ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
+      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Autonomous Agent Ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
       "styles.css": "body {\n  font-family: sans-serif;\n  display: grid;\n  place-content: center;\n  height: 90vh;\n  background: #fafafa;\n  color: #222;\n  text-align: center;\n}",
       "script.js": "console.log('Omni app loaded.');"
     };
@@ -619,13 +652,14 @@
       document.getElementById("libs-modal-overlay").classList.toggle("open", open);
     }
 
-    function injectCdn(key) {
-      const tag = CDN_TAGS[key];
+    // Autonomous Tool: Injects CDN library directly into index.html
+    function injectCdn(key, silent = false) {
+      const tag = CDN_TAGS[key.toLowerCase()];
       const current = getActiveSession();
-      if (!current || !current.files["index.html"] || !tag) return;
+      if (!current || !current.files["index.html"] || !tag) return false;
 
       let html = current.files["index.html"];
-      if (html.includes(tag)) return alert("Library already injected in index.html!");
+      if (html.includes(tag)) return true;
 
       captureSnapshot();
       if (html.includes("</head>")) {
@@ -640,8 +674,42 @@
       saveSessions();
       loadFileEditor();
       renderSandboxPreview();
-      toggleLibsModal(false);
-      alert(`Injected ${key}!`);
+      if (!silent) {
+        toggleLibsModal(false);
+        alert(`Injected ${key}!`);
+      }
+      return true;
+    }
+
+    // Autonomous Tool: Creates new file with initial content
+    function agentCreateFile(filename, content = "") {
+      const current = getActiveSession();
+      if (!current || !filename) return false;
+      captureSnapshot();
+      current.files[filename] = content;
+      activeFileName = filename;
+      saveSessions();
+      renderFileTree();
+      loadFileEditor();
+      renderSandboxPreview();
+      return true;
+    }
+
+    function renderAgentPlan(plan) {
+      const banner = document.getElementById("agent-plan-banner");
+      const stepContainer = document.getElementById("agent-plan-steps");
+      if (!plan || !plan.length) {
+        banner.style.display = "none";
+        return;
+      }
+      stepContainer.innerHTML = "";
+      plan.forEach((s, idx) => {
+        const item = document.createElement("div");
+        item.className = `plan-step-item ${idx === 0 ? "active" : ""}`;
+        item.innerHTML = `<span>${idx + 1}.</span> <span>${s}</span>`;
+        stepContainer.appendChild(item);
+      });
+      banner.style.display = "flex";
     }
 
     function toggleConsoleModal(force) {
@@ -675,6 +743,7 @@
       current.files = JSON.parse(JSON.stringify(current.history[current.historyIdx]));
       saveSessions();
       loadFileEditor();
+      renderFileTree();
       renderSandboxPreview();
     }
 
@@ -685,6 +754,7 @@
       current.files = JSON.parse(JSON.stringify(current.history[current.historyIdx]));
       saveSessions();
       loadFileEditor();
+      renderFileTree();
       renderSandboxPreview();
     }
 
@@ -737,9 +807,7 @@
 
         if (lastRecognizedText.length > 0) {
           voiceDispatchTimer = setTimeout(() => {
-            if (speechRecognizer) {
-              speechRecognizer.stop();
-            }
+            if (speechRecognizer) speechRecognizer.stop();
           }, 1100);
         }
       };
@@ -829,12 +897,7 @@
     function promptNewFile() {
       const name = window.prompt("New File Name (e.g. app.js, styles.css):");
       if (!name) return;
-      const current = getActiveSession();
-      if (!current.files[name]) {
-        current.files[name] = "";
-        captureSnapshot();
-        switchFile(name);
-      }
+      agentCreateFile(name, "");
     }
 
     function deleteFile(name) {
@@ -1284,7 +1347,6 @@
       document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
       document.getElementById("view-" + name).classList.add("active");
 
-      // Full screen immersive canvas mode toggle
       if (name === "preview") {
         document.body.classList.add("immersive-preview");
       } else {
@@ -1490,27 +1552,50 @@
       promptInput.value = "";
 
       const currentFilesContext = JSON.stringify(current.files, null, 2);
-      const systemPrompt = `You are a web development assistant.
+      
+      // Autonomous Multi-Step Agent Instructions + Tool Calling Schema
+      const systemPrompt = `You are an Autonomous Software Agent capable of planning, creating files, and calling tools.
 Project Rules: ${customRules}
-Active File: "${activeFileName}"
-
-All Project Files:
+Currently Active File: "${activeFileName}"
+All Available Files:
 ${currentFilesContext}
 
-Return ONLY the updated code for the active file ("${activeFileName}") enclosed in triple backticks (\`\`\`html, \`\`\`css, or \`\`\`javascript).`;
+AVAILABLE TOOL ACTIONS:
+1. Multi-Step Plan: Break down complex goals into tasks:
+\`\`\`agent_plan
+["Step 1: description", "Step 2: description", "Step 3: description"]
+\`\`\`
 
-      appendChat("assistant", "Thinking & coding...");
+2. Autonomous Tool Calling (CDN Injection):
+Available CDNs: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'.
+\`\`\`tool_call
+{"action": "inject_cdn", "library": "tailwind"}
+\`\`\`
+
+3. Autonomous File Creation:
+\`\`\`tool_call
+{"action": "create_file", "filename": "auth.js", "content": "// code"}
+\`\`\`
+
+4. Code Updating:
+Return the full updated code for the target file enclosed in triple backticks with a filepath header:
+\`\`\`filepath:index.html
+<!DOCTYPE html>...
+\`\`\`
+If only updating the active file "${activeFileName}", regular code backticks (\`\`\`html or \`\`\`javascript) are accepted.`;
+
+      appendChat("assistant", "🤖 Agent thinking & planning...");
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
       const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => timeoutController.abort(), 30000);
+      const timeoutId = setTimeout(() => timeoutController.abort(), 40000);
 
       try {
         let reply = "";
 
         if (provider === "gemini") {
-          const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
+          const parts = [{ text: systemPrompt + "\n\nUser Goal: " + prompt }];
           if (attachedImage) {
             parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
           }
@@ -1595,27 +1680,71 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        const codeMatch = reply.match(/```[a-zA-Z]*\s*([\s\S]*?)\s*```/);
-        if (codeMatch && codeMatch[1]) {
-          const generatedCode = codeMatch[1].trim();
+        // --- 1. Autonomous Planning Execution ---
+        const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
+        if (planMatch && planMatch[1]) {
+          try {
+            const parsedPlan = JSON.parse(planMatch[1]);
+            renderAgentPlan(parsedPlan);
+          } catch(e) {
+            console.warn("Plan parsing skipped:", e);
+          }
+        }
 
-          captureSnapshot();
-          current.files[activeFileName] = generatedCode;
-          document.getElementById("code-editor").value = generatedCode;
+        // --- 2. Autonomous Tool Calling (Function Calls) ---
+        const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
+        for (const tc of toolCalls) {
+          try {
+            const tool = JSON.parse(tc[1]);
+            if (tool.action === "inject_cdn" && tool.library) {
+              injectCdn(tool.library, true);
+              appendChat("system-agent", `⚡ Tool Executed: Injected CDN '${tool.library}' into index.html`);
+            } else if (tool.action === "create_file" && tool.filename) {
+              agentCreateFile(tool.filename, tool.content || "");
+              appendChat("system-agent", `📁 File Created: '${tool.filename}' initialized autonomously.`);
+            }
+          } catch(err) {
+            console.warn("Tool Call Error:", err);
+          }
+        }
+
+        // --- 3. Autonomous Multi-File Code Updates ---
+        const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
+        let matched;
+        let codeUpdated = false;
+
+        while ((matched = fileBlockRegex.exec(reply)) !== null) {
+          const targetPath = matched[1] || activeFileName;
+          const codeBody = matched[3].trim();
+
+          if (matched[0].includes("agent_plan") || matched[0].includes("tool_call")) continue;
+
+          if (codeBody.length > 20) {
+            captureSnapshot();
+            current.files[targetPath] = codeBody;
+            if (targetPath === activeFileName) {
+              document.getElementById("code-editor").value = codeBody;
+            }
+            codeUpdated = true;
+          }
+        }
+
+        if (codeUpdated) {
           saveSessions();
-
+          renderFileTree();
           renderSandboxPreview();
           switchTab("preview");
           triggerAutonomousVerification();
         }
+
         saveSessions();
 
       } catch (err) {
         clearTimeout(timeoutId);
         statusDot.className = "status-dot offline";
         let errorMsg = err.message;
-        if (err.name === "AbortError") errorMsg = "Request timed out (Connection dead or dropped)!";
-        else if (!navigator.onLine) errorMsg = "Network connection dropped mid-request!";
+        if (err.name === "AbortError") errorMsg = "Request timed out!";
+        else if (!navigator.onLine) errorMsg = "Network connection dropped!";
         statusText.innerText = "❌ Connection Dropped";
         loadingMsg.innerText = "⚠️ Failed: " + errorMsg;
       }
