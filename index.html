@@ -157,6 +157,7 @@
       cursor: pointer;
     }
 
+    /* Tabs (Mobile only) */
     .nav-tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -177,6 +178,7 @@
       font-weight: 600;
     }
 
+    /* Workspace Panels */
     main {
       flex: 1;
       position: relative;
@@ -189,6 +191,18 @@
       flex-direction: column;
     }
     .view-panel.active { display: flex; }
+
+    .panel-header {
+      display: none;
+      padding: 8px 12px;
+      background: #151821;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
 
     #chat-history {
       flex: 1;
@@ -255,6 +269,30 @@
       border: none;
       background: #ffffff;
     }
+
+    /* Desktop Side-by-Side 3-Pane View */
+    @media (min-width: 900px) {
+      .nav-tabs {
+        display: none;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 360px 1fr 1fr;
+        height: 100%;
+      }
+      .view-panel {
+        position: relative !important;
+        inset: auto !important;
+        display: flex !important;
+        border-right: 1px solid var(--border);
+      }
+      .view-panel:last-child {
+        border-right: none;
+      }
+      .panel-header {
+        display: flex;
+      }
+    }
   </style>
 </head>
 <body>
@@ -299,6 +337,7 @@
 
   <main>
     <div id="view-chat" class="view-panel active">
+      <div class="panel-header">AI Chat</div>
       <div id="chat-history"></div>
       <div class="input-row">
         <textarea id="prompt-input" placeholder="Prompt AI to edit/create web code..."></textarea>
@@ -307,10 +346,12 @@
     </div>
 
     <div id="view-code" class="view-panel">
+      <div class="panel-header">Current Code</div>
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
     <div id="view-preview" class="view-panel">
+      <div class="panel-header">Live Preview</div>
       <iframe id="preview-frame"></iframe>
     </div>
   </main>
@@ -379,7 +420,9 @@
       saveSessions();
       loadSessionUI();
       renderSidebar();
-      toggleSidebar();
+      if (document.getElementById("sidebar").classList.contains("open")) {
+        toggleSidebar();
+      }
     }
 
     function switchSession(id) {
@@ -387,7 +430,9 @@
       saveSessions();
       loadSessionUI();
       renderSidebar();
-      toggleSidebar();
+      if (document.getElementById("sidebar").classList.contains("open")) {
+        toggleSidebar();
+      }
     }
 
     function deleteSession(id) {
