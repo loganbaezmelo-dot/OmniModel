@@ -256,14 +256,11 @@
       const linkEl = document.getElementById("get-key-link");
       const select = document.getElementById("model-select");
 
-      // Load stored key for chosen provider
       keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
 
-      // Update helper link
       linkEl.innerText = KEY_LINKS[provider].text;
       linkEl.href = KEY_LINKS[provider].url;
 
-      // Reset models
       select.innerHTML = '<option value="">(No models)</option>';
       document.getElementById("status-indicator").classList.remove("active");
       document.getElementById("status-text").innerText = "Key loaded. Click Connect.";
@@ -335,12 +332,25 @@
         }
 
         modelSelect.innerHTML = "";
+
+        // Filter out non-chat audio/image models
+        models = models.filter(m => !m.includes("-tts") && !m.includes("-clip") && !m.includes("lyria"));
+
         models.forEach(m => {
           const opt = document.createElement("option");
           opt.value = m;
           opt.textContent = m;
           modelSelect.appendChild(opt);
         });
+
+        // Automatically snap directly to gemini-pro-latest if found
+        const targetModel = models.find(m => m === "gemini-pro-latest") 
+                         || models.find(m => m.includes("pro-latest"))
+                         || models.find(m => m.includes("pro"));
+
+        if (targetModel) {
+          modelSelect.value = targetModel;
+        }
 
         statusDot.classList.add("active");
         statusText.innerText = `Connected: ${modelSelect.value}`;
@@ -455,7 +465,6 @@ ${currentCode}
       history.scrollTop = history.scrollHeight;
     }
 
-    // Init keys on first load
     onProviderChange();
     updatePreview();
   </script>
