@@ -25,6 +25,8 @@
       height: 100dvh;
       overflow: hidden;
     }
+    
+    /* Studio Header */
     header {
       padding: 10px 14px;
       background: var(--card);
@@ -48,31 +50,12 @@
       font-size: 14px;
       outline: none;
     }
-    optgroup {
-      background: #1a1d26;
-      color: var(--accent);
-      font-weight: bold;
-    }
-    option {
-      background: #252a36;
-      color: var(--text);
-      font-weight: normal;
-    }
+    optgroup { background: #1a1d26; color: var(--accent); font-weight: bold; }
+    option { background: #252a36; color: var(--text); font-weight: normal; }
     input[type="password"], input[type="text"] { flex: 1; min-width: 130px; }
-    button {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
-    }
+    button { background: var(--accent); color: #fff; border: none; font-weight: 600; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .icon-btn {
-      padding: 8px 12px;
-      background: #252a36;
-      border: 1px solid var(--border);
-      color: var(--text);
-    }
+    .icon-btn { padding: 8px 12px; background: #252a36; border: 1px solid var(--border); color: var(--text); }
     .export-btn { background: #10b981; }
     .github-btn { background: #238636; }
     .libs-btn { background: #8b5cf6; }
@@ -92,94 +75,6 @@
     .status-dot.offline { background: #ef4444; animation: pulse 1s infinite alternate; }
     .get-key-link { color: #818cf8; text-decoration: none; font-weight: 500; }
 
-    /* Sidebar Drawer */
-    #sidebar-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.6);
-      z-index: 99;
-      display: none;
-    }
-    #sidebar-overlay.open { display: block; }
-    #sidebar {
-      position: fixed;
-      top: 0;
-      bottom: 0;
-      left: 0;
-      width: 320px;
-      background: var(--card);
-      border-right: 1px solid var(--border);
-      z-index: 100;
-      transform: translateX(-100%);
-      transition: transform 0.25s ease;
-      display: flex;
-      flex-direction: column;
-    }
-    #sidebar.open { transform: translateX(0); }
-    .sidebar-header {
-      padding: 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .sidebar-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .chat-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px;
-      border-radius: 6px;
-      background: #252a36;
-      cursor: pointer;
-      font-size: 13px;
-      border: 1px solid transparent;
-    }
-    .chat-item.active { border-color: var(--accent); background: #2e3447; }
-    .chat-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-    .chat-del-btn { background: none; border: none; color: var(--danger); font-size: 16px; padding: 2px 6px; cursor: pointer; }
-
-    .sidebar-section {
-      padding: 12px;
-      border-top: 1px solid var(--border);
-      background: #151821;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .sidebar-section h4 {
-      font-size: 11px;
-      color: var(--muted);
-      text-transform: uppercase;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .gh-inputs { display: flex; flex-direction: column; gap: 6px; }
-    .gh-inputs input { font-size: 12px; padding: 6px 10px; }
-    .gh-btns { display: flex; gap: 6px; }
-    .gh-btns button { flex: 1; padding: 6px 8px; font-size: 12px; }
-    .rules-textarea {
-      width: 100%;
-      height: 60px;
-      background: #252a36;
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      resize: none;
-      outline: none;
-      font-family: monospace;
-    }
-
     /* Navigation Tabs */
     .nav-tabs { display: flex; border-bottom: 1px solid var(--border); background: #151821; }
     .tab-btn {
@@ -192,6 +87,12 @@
       font-size: 13px;
     }
     .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+    /* Hide outer UI chrome when in full-screen preview */
+    body.immersive-preview header,
+    body.immersive-preview .nav-tabs {
+      display: none !important;
+    }
 
     /* Workspace Panels */
     main { flex: 1; position: relative; overflow: hidden; }
@@ -212,68 +113,7 @@
       align-items: center;
     }
 
-    /* Virtual File Tree Bar */
-    .file-tree-bar {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      background: #0f1117;
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto;
-    }
-    .file-pill {
-      font-size: 12px;
-      padding: 4px 8px;
-      background: #1a1d26;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-    .file-pill.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-    .file-pill-del { font-size: 11px; opacity: 0.7; }
-    .file-pill-del:hover { opacity: 1; }
-
-    .history-controls { display: flex; align-items: center; gap: 4px; }
-    .history-btn { padding: 2px 8px; font-size: 11px; background: #252a36; }
-
-    /* Autonomous Verification & Notification Banner */
-    #diff-banner {
-      display: none;
-      padding: 8px 12px;
-      background: #1e293b;
-      border-bottom: 1px solid var(--border);
-      align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
-      gap: 10px;
-    }
-    .diff-actions { display: flex; gap: 6px; }
-    .btn-apply { background: var(--success); padding: 4px 10px; font-size: 12px; }
-    .btn-discard { background: var(--danger); padding: 4px 10px; font-size: 12px; }
-
-    /* Runtime Error Banner */
-    #error-banner {
-      display: none;
-      padding: 8px 12px;
-      background: rgba(239, 68, 68, 0.2);
-      border-bottom: 1px solid var(--danger);
-      color: #fca5a5;
-      font-size: 12px;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    #error-banner button { background: var(--danger); padding: 4px 10px; font-size: 12px; white-space: nowrap; }
-
+    /* Chat UI */
     #chat-history { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
     .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
     .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
@@ -312,23 +152,36 @@
       height: 44px;
       outline: none;
     }
-    .media-btn {
-      padding: 10px 12px;
-      background: #252a36;
-      border: 1px solid var(--border);
-      font-size: 16px;
-      display: grid;
-      place-content: center;
-    }
-    .media-btn.recording {
-      background: var(--danger);
-      animation: pulse 1s infinite alternate;
-    }
-    .media-btn.auto-send-active {
-      border-color: var(--success);
-      color: var(--success);
-    }
+    .media-btn { padding: 10px 12px; background: #252a36; border: 1px solid var(--border); font-size: 16px; display: grid; place-content: center; }
+    .media-btn.recording { background: var(--danger); animation: pulse 1s infinite alternate; }
+    .media-btn.auto-send-active { border-color: var(--success); color: var(--success); }
     @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
+
+    /* Code View */
+    .file-tree-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      background: #0f1117;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .file-pill {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: #1a1d26;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .file-pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .file-pill-del { font-size: 11px; opacity: 0.7; }
+    .file-pill-del:hover { opacity: 1; }
 
     #code-editor {
       width: 100%;
@@ -343,45 +196,111 @@
       outline: none;
     }
 
-    .preview-container {
-      flex: 1;
-      background: #1e222d;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    /* Immersive Canvas Workspace */
+    #view-preview {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100dvh;
+      background: #ffffff;
       overflow: hidden;
-      position: relative;
     }
     #preview-frame {
       width: 100%;
-      flex: 1;
+      height: 100%;
       border: none;
       background: #ffffff;
-      transition: width 0.2s ease;
     }
-    .viewport-pill {
-      padding: 2px 6px;
-      font-size: 11px;
-      background: #252a36;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .viewport-pill.active { background: var(--accent); color: #fff; }
 
-    /* Console Drawer */
-    #console-drawer {
-      width: 100%;
-      background: #090a0f;
-      border-top: 1px solid var(--border);
+    /* Floating Top Exit & Actions Pill */
+    .preview-floating-bar {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(15, 17, 23, 0.88);
+      backdrop-filter: blur(8px);
+      padding: 4px 8px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      max-width: 95vw;
+      overflow-x: auto;
+    }
+    .preview-floating-bar button {
+      padding: 5px 10px;
+      font-size: 11px;
+      border-radius: 14px;
+      background: #252a36;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .preview-floating-bar button.primary { background: var(--accent); }
+    .preview-floating-bar button.inspect-active {
+      background: var(--accent);
+      border-color: #818cf8;
+      box-shadow: 0 0 8px rgba(99,102,241,0.5);
+    }
+
+    /* Floating Banners Overlay */
+    .floating-banner-container {
+      position: absolute;
+      top: 52px;
+      left: 10px;
+      right: 10px;
+      z-index: 49;
       display: flex;
       flex-direction: column;
-      max-height: 180px;
-      height: 32px;
-      transition: height 0.2s ease;
-      z-index: 20;
+      gap: 6px;
+      pointer-events: none;
     }
-    #console-drawer.expanded { height: 160px; }
+    #diff-banner, #error-banner {
+      pointer-events: auto;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+    }
+    #diff-banner {
+      display: none;
+      padding: 8px 12px;
+      background: #064e3b;
+      border: 1px solid var(--success);
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    #error-banner {
+      display: none;
+      padding: 8px 12px;
+      background: #7f1d1d;
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      font-size: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #error-banner button { background: var(--danger); padding: 4px 8px; font-size: 11px; }
+
+    /* Floating Mini-Console Modal */
+    #console-modal {
+      position: absolute;
+      bottom: 12px;
+      left: 10px;
+      right: 10px;
+      background: rgba(9, 10, 15, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 180px;
+      display: none;
+      flex-direction: column;
+      z-index: 50;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    #console-modal.open { display: flex; }
     .console-header {
       padding: 6px 12px;
       background: #151821;
@@ -391,8 +310,7 @@
       font-size: 11px;
       font-family: monospace;
       color: var(--muted);
-      cursor: pointer;
-      user-select: none;
+      border-bottom: 1px solid var(--border);
     }
     .console-logs {
       flex: 1;
@@ -409,61 +327,55 @@
     .log-item.warn { color: #fbbf24; }
     .log-item.error { color: #f87171; }
 
-    /* CDN Inject Modal */
-    #libs-modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 101;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+    /* Sidebar Drawer & Modals */
+    #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; display: none; }
+    #sidebar-overlay.open { display: block; }
+    #sidebar {
+      position: fixed; top: 0; bottom: 0; left: 0; width: 320px;
+      background: var(--card); border-right: 1px solid var(--border);
+      z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease;
+      display: flex; flex-direction: column;
     }
+    #sidebar.open { transform: translateX(0); }
+    .sidebar-header { padding: 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .sidebar-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .chat-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px; border-radius: 6px; background: #252a36; cursor: pointer;
+      font-size: 13px; border: 1px solid transparent;
+    }
+    .chat-item.active { border-color: var(--accent); background: #2e3447; }
+    .chat-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+    .chat-del-btn { background: none; border: none; color: var(--danger); font-size: 16px; padding: 2px 6px; cursor: pointer; }
+    .sidebar-section { padding: 12px; border-top: 1px solid var(--border); background: #151821; display: flex; flex-direction: column; gap: 6px; }
+    .sidebar-section h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+    .gh-inputs { display: flex; flex-direction: column; gap: 6px; }
+    .gh-inputs input { font-size: 12px; padding: 6px 10px; }
+    .gh-btns { display: flex; gap: 6px; }
+    .gh-btns button { flex: 1; padding: 6px 8px; font-size: 12px; }
+    .rules-textarea {
+      width: 100%; height: 60px; background: #252a36; border: 1px solid var(--border);
+      color: var(--text); padding: 8px; border-radius: 6px; font-size: 12px; resize: none; outline: none; font-family: monospace;
+    }
+
+    #libs-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 101; display: none; align-items: center; justify-content: center; padding: 20px; }
     #libs-modal-overlay.open { display: flex; }
-    .libs-modal {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      width: 100%;
-      max-width: 400px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .libs-header {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 14px;
-    }
-    .libs-list {
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      max-height: 320px;
-      overflow-y: auto;
-    }
-    .lib-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 10px;
-      background: #252a36;
-      border-radius: 6px;
-    }
+    .libs-modal { background: var(--card); border: 1px solid var(--border); border-radius: 8px; width: 100%; max-width: 400px; display: flex; flex-direction: column; overflow: hidden; }
+    .libs-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+    .libs-list { padding: 14px; display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; }
+    .lib-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #252a36; border-radius: 6px; }
     .lib-info { display: flex; flex-direction: column; gap: 2px; }
     .lib-name { font-size: 13px; font-weight: 600; }
     .lib-desc { font-size: 11px; color: var(--muted); }
 
     @media (min-width: 900px) {
+      body.immersive-preview header,
+      body.immersive-preview .nav-tabs { display: flex !important; }
       .nav-tabs { display: none; }
       main { display: grid; grid-template-columns: 380px 1fr 1fr; height: 100%; }
-      .view-panel { position: relative !important; inset: auto !important; display: flex !important; border-right: 1px solid var(--border); }
+      .view-panel { position: relative !important; inset: auto !important; display: flex !important; border-right: 1px solid var(--border); width: auto !important; height: auto !important; }
       .view-panel:last-child { border-right: none; }
+      .preview-floating-bar { display: none; }
     }
   </style>
 </head>
@@ -581,9 +493,9 @@
     <div id="view-chat" class="view-panel active">
       <div class="panel-header">
         <span>AI Assistant</span>
-        <div class="history-controls">
-          <button class="history-btn" onclick="undoSnapshot()" title="Rollback edit">↩ Undo</button>
-          <button class="history-btn" onclick="redoSnapshot()" title="Redo edit">↪ Redo</button>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="undoSnapshot()">↩ Undo</button>
+          <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="redoSnapshot()">↪ Redo</button>
         </div>
       </div>
       <div id="chat-history"></div>
@@ -609,50 +521,48 @@
         <span>Files & Code</span>
         <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="promptNewFile()">+ File</button>
       </div>
-      
       <div id="file-tree-bar" class="file-tree-bar"></div>
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
-    <!-- View: Live Preview Canvas -->
+    <!-- View: Live Preview Canvas (Full screen immersive on mobile) -->
     <div id="view-preview" class="view-panel">
-      <div class="panel-header">
-        <div style="display:flex; gap:4px; align-items:center;">
-          <span>Canvas</span>
-          <button id="inspect-toggle-btn" class="icon-btn" style="padding:2px 6px; font-size:11px;" onclick="toggleInspector()">🔍 Inspect</button>
-        </div>
-        <div style="display:flex; gap:4px;">
-          <button class="viewport-pill" onclick="setViewport('375px', this)">📱 375</button>
-          <button class="viewport-pill" onclick="setViewport('768px', this)">💻 768</button>
-          <button class="viewport-pill active" onclick="setViewport('100%', this)">🖥️ 100%</button>
-        </div>
+      <!-- Floating Pill Controls at Top of Canvas -->
+      <div class="preview-floating-bar">
+        <button class="primary" onclick="switchTab('chat')">← Chat</button>
+        <button onclick="switchTab('code')">Files</button>
+        <button id="inspect-toggle-btn" onclick="toggleInspector()">🔍 Inspect</button>
+        <button onclick="toggleConsoleModal()"><span id="console-badge">⚡ Logs</span></button>
       </div>
-      
-      <!-- Autonomous Auto-Verification Banner -->
-      <div id="diff-banner"></div>
 
-      <div id="error-banner">
-        <span id="error-banner-text">Error occurred</span>
-        <button onclick="fixCurrentError()">Fix with AI 🪄</button>
-      </div>
-      <div class="preview-container">
-        <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
-        
-        <!-- Live Console Logs Drawer -->
-        <div id="console-drawer">
-          <div class="console-header" onclick="toggleConsoleDrawer()">
-            <span id="console-title">Console (0) ▵</span>
-            <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="event.stopPropagation(); clearConsoleLogs()">Clear</button>
-          </div>
-          <div id="console-logs" class="console-logs"></div>
+      <!-- Floating Banners Overlays -->
+      <div class="floating-banner-container">
+        <div id="diff-banner"></div>
+        <div id="error-banner">
+          <span id="error-banner-text">Error occurred</span>
+          <button onclick="fixCurrentError()">Fix with AI 🪄</button>
         </div>
+      </div>
+
+      <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+
+      <!-- Floating Mini Console Modal -->
+      <div id="console-modal">
+        <div class="console-header">
+          <span id="console-title">Sandbox Console (0)</span>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearConsoleLogs()">Clear</button>
+            <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="toggleConsoleModal(false)">×</button>
+          </div>
+        </div>
+        <div id="console-logs" class="console-logs"></div>
       </div>
     </div>
   </main>
 
   <script>
     const DEFAULT_PROJECT = {
-      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Multi-file project ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
+      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Full screen canvas ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
       "styles.css": "body {\n  font-family: sans-serif;\n  display: grid;\n  place-content: center;\n  height: 90vh;\n  background: #fafafa;\n  color: #222;\n  text-align: center;\n}",
       "script.js": "console.log('Omni app loaded.');"
     };
@@ -685,7 +595,6 @@
     let isVoiceAutoSend = localStorage.getItem("omni_voice_autosend") === "true";
     let consoleLogCount = 0;
 
-    // --- Network Watcher ---
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
       const text = document.getElementById("status-text");
@@ -715,10 +624,9 @@
       if (!current || !current.files["index.html"] || !tag) return;
 
       let html = current.files["index.html"];
-      if (html.includes(tag)) return alert("This library is already injected in index.html!");
+      if (html.includes(tag)) return alert("Library already injected in index.html!");
 
       captureSnapshot();
-
       if (html.includes("</head>")) {
         html = html.replace("</head>", `  ${tag}\n</head>`);
       } else if (html.includes("<body>")) {
@@ -732,22 +640,20 @@
       loadFileEditor();
       renderSandboxPreview();
       toggleLibsModal(false);
-      alert(`Injected ${key} into index.html!`);
+      alert(`Injected ${key}!`);
     }
 
-    function toggleConsoleDrawer() {
-      const drawer = document.getElementById("console-drawer");
-      const title = document.getElementById("console-title");
-      drawer.classList.toggle("expanded");
-      title.innerText = drawer.classList.contains("expanded") 
-        ? `Console (${consoleLogCount}) ▾` 
-        : `Console (${consoleLogCount}) ▵`;
+    function toggleConsoleModal(force) {
+      const modal = document.getElementById("console-modal");
+      if (force !== undefined) modal.classList.toggle("open", force);
+      else modal.classList.toggle("open");
     }
 
     function clearConsoleLogs() {
       document.getElementById("console-logs").innerHTML = "";
       consoleLogCount = 0;
-      document.getElementById("console-title").innerText = "Console (0) ▵";
+      document.getElementById("console-title").innerText = "Sandbox Console (0)";
+      document.getElementById("console-badge").innerText = "⚡ Logs";
     }
 
     function captureSnapshot() {
@@ -819,7 +725,6 @@
         const input = document.getElementById("prompt-input");
         input.value = (input.value ? input.value + " " : "") + transcript;
         
-        // Auto-send hook if toggled active
         if (isVoiceAutoSend && transcript.trim().length > 0) {
           setTimeout(() => sendMessage(), 300);
         }
@@ -852,12 +757,6 @@
       attachedImage = null;
       document.getElementById("file-uploader").value = "";
       document.getElementById("image-preview-bar").style.display = "none";
-    }
-
-    function setViewport(width, btn) {
-      document.querySelectorAll(".viewport-pill").forEach(p => p.classList.remove("active"));
-      btn.classList.add("active");
-      document.getElementById("preview-frame").style.width = width;
     }
 
     function renderFileTree() {
@@ -980,7 +879,6 @@
     async function pushToGitHub() {
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
-      
       const targetPath = activeFileName || document.getElementById("gh-path").value.trim() || "index.html";
       document.getElementById("gh-path").value = targetPath;
       saveGhConfig();
@@ -1183,7 +1081,6 @@
         }
       });
 
-      // Hook console.log, warn, error & element inspector inside iframe
       const injectedHooks = `
         <script>
           (function() {
@@ -1250,12 +1147,11 @@
 
         if (token && repo) {
           banner.style.display = "flex";
-          banner.style.background = "#064e3b";
           banner.innerHTML = `
-            <span>✅ Build verified (0 errors). Push ${activeFileName} to GitHub?</span>
-            <div class="diff-actions">
-              <button class="btn-apply" onclick="pushToGitHub()">⬆ Commit & Push</button>
-              <button class="btn-discard" onclick="document.getElementById('diff-banner').style.display='none'">Dismiss</button>
+            <span>✅ Build verified (0 errors). Push to GitHub?</span>
+            <div style="display:flex; gap:6px;">
+              <button style="background:var(--success); padding:3px 8px; font-size:11px;" onclick="pushToGitHub()">⬆ Commit</button>
+              <button class="icon-btn" style="padding:3px 6px; font-size:11px;" onclick="document.getElementById('diff-banner').style.display='none'">×</button>
             </div>
           `;
         }
@@ -1265,10 +1161,10 @@
     window.addEventListener("message", (e) => {
       if (!e.data) return;
       
-      // Catch Console Logs
       if (e.data.type === "OMNI_CONSOLE_OUTPUT") {
         consoleLogCount++;
-        document.getElementById("console-title").innerText = `Console (${consoleLogCount}) ▵`;
+        document.getElementById("console-title").innerText = `Sandbox Console (${consoleLogCount})`;
+        document.getElementById("console-badge").innerText = `⚡ Logs (${consoleLogCount})`;
         const logsContainer = document.getElementById("console-logs");
         const row = document.createElement("div");
         row.className = `log-item ${e.data.level}`;
@@ -1295,7 +1191,14 @@
     function toggleInspector(forceState) {
       isInspectorActive = forceState !== undefined ? forceState : !isInspectorActive;
       const btn = document.getElementById("inspect-toggle-btn");
-      btn.style.background = isInspectorActive ? "var(--accent)" : "#252a36";
+      if (isInspectorActive) {
+        btn.classList.add("inspect-active");
+        btn.innerText = "🔍 Inspecting...";
+      } else {
+        btn.classList.remove("inspect-active");
+        btn.innerText = "🔍 Inspect";
+      }
+
       const iframe = document.getElementById("preview-frame");
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage({ type: "OMNI_SET_INSPECT_MODE", active: isInspectorActive }, "*");
@@ -1340,6 +1243,15 @@
       });
       document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
       document.getElementById("view-" + name).classList.add("active");
+
+      // Full screen immersive canvas mode toggle
+      if (name === "preview") {
+        document.body.classList.add("immersive-preview");
+      } else {
+        document.body.classList.remove("immersive-preview");
+        toggleInspector(false);
+        toggleConsoleModal(false);
+      }
     }
 
     function extractGptVersion(id) {
@@ -1661,14 +1573,9 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
       } catch (err) {
         clearTimeout(timeoutId);
         statusDot.className = "status-dot offline";
-        
         let errorMsg = err.message;
-        if (err.name === "AbortError") {
-          errorMsg = "Request timed out (Connection dead or dropped)!";
-        } else if (!navigator.onLine) {
-          errorMsg = "Network connection dropped mid-request!";
-        }
-
+        if (err.name === "AbortError") errorMsg = "Request timed out (Connection dead or dropped)!";
+        else if (!navigator.onLine) errorMsg = "Network connection dropped mid-request!";
         statusText.innerText = "❌ Connection Dropped";
         loadingMsg.innerText = "⚠️ Failed: " + errorMsg;
       }
