@@ -178,7 +178,7 @@
       font-family: monospace;
     }
 
-    /* Tabs (Mobile) */
+    /* Navigation Tabs */
     .nav-tabs { display: flex; border-bottom: 1px solid var(--border); background: #151821; }
     .tab-btn {
       flex: 1;
@@ -210,7 +210,7 @@
       align-items: center;
     }
 
-    /* File Tree Bar */
+    /* Virtual File Tree Bar */
     .file-tree-bar {
       display: flex;
       align-items: center;
@@ -243,7 +243,7 @@
     .history-controls { display: flex; align-items: center; gap: 4px; }
     .history-btn { padding: 2px 8px; font-size: 11px; background: #252a36; }
 
-    /* Diff Review Banner */
+    /* Autonomous Verification & Notification Banner */
     #diff-banner {
       display: none;
       padding: 8px 12px;
@@ -467,14 +467,6 @@
       </div>
       
       <div id="file-tree-bar" class="file-tree-bar"></div>
-
-      <div id="diff-banner">
-        <span>⚠️ Generated Changes Pending</span>
-        <div class="diff-actions">
-          <button class="btn-apply" onclick="acceptDiff()">Apply</button>
-          <button class="btn-discard" onclick="rejectDiff()">Discard</button>
-        </div>
-      </div>
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
@@ -491,6 +483,10 @@
           <button class="viewport-pill active" onclick="setViewport('100%', this)">🖥️ 100%</button>
         </div>
       </div>
+      
+      <!-- Autonomous Auto-Verification Banner -->
+      <div id="diff-banner"></div>
+
       <div id="error-banner">
         <span id="error-banner-text">Error occurred</span>
         <button onclick="fixCurrentError()">Fix with AI 🪄</button>
@@ -519,8 +515,6 @@
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
     let activeSessionId = localStorage.getItem("omni_active_session_id") || null;
     let activeFileName = "index.html";
-    let pendingDiffCode = null;
-    let preDiffSnapshot = null;
     let isInspectorActive = false;
     let lastCapturedError = null;
     let currentFileSha = null;
@@ -776,8 +770,8 @@
 
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
+        document.getElementById("diff-banner").style.display = "none";
         alert(`Successfully pushed ${path} to ${repo}!`);
-        toggleSidebar();
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -943,12 +937,44 @@
       document.getElementById("preview-frame").srcdoc = html + injectedHooks;
     }
 
+    // --- Autonomous Verification Routine ---
+    function triggerAutonomousVerification() {
+      const banner = document.getElementById("diff-banner");
+      banner.style.display = "none";
+
+      const token = localStorage.getItem("omni_gh_token");
+      const repo = localStorage.getItem("omni_gh_repo");
+      lastCapturedError = null;
+
+      // Allow 1 second for DOM mounting and script execution
+      setTimeout(() => {
+        if (lastCapturedError) {
+          console.warn("Autonomous verification flagged runtime error:", lastCapturedError);
+          return;
+        }
+
+        if (token && repo) {
+          banner.style.display = "flex";
+          banner.style.background = "#064e3b";
+          banner.innerHTML = `
+            <span>✅ Build verified (0 errors). Push ${activeFileName} to GitHub?</span>
+            <div class="diff-actions">
+              <button class="btn-apply" onclick="pushToGitHub()">⬆ Commit & Push</button>
+              <button class="btn-discard" onclick="document.getElementById('diff-banner').style.display='none'">Dismiss</button>
+            </div>
+          `;
+          switchTab("preview");
+        }
+      }, 1000);
+    }
+
     window.addEventListener("message", (e) => {
       if (!e.data) return;
       if (e.data.type === "OMNI_RUNTIME_ERROR") {
         lastCapturedError = e.data.error;
         document.getElementById("error-banner-text").innerText = `⚠️ ${lastCapturedError}`;
         document.getElementById("error-banner").style.display = "flex";
+        document.getElementById("diff-banner").style.display = "none";
       }
       if (e.data.type === "OMNI_ELEMENT_INSPECTED") {
         const input = document.getElementById("prompt-input");
@@ -975,30 +1001,6 @@
       promptInput.value = `Fix this runtime console error occurring in ${activeFileName}:\n"${lastCapturedError}"`;
       switchTab("chat");
       sendMessage();
-    }
-
-    function promptDiffReview(newCode) {
-      preDiffSnapshot = document.getElementById("code-editor").value;
-      pendingDiffCode = newCode;
-      document.getElementById("diff-banner").style.display = "flex";
-      document.getElementById("code-editor").value = newCode;
-      switchTab("code");
-    }
-
-    function acceptDiff() {
-      const current = getActiveSession();
-      if (!current || !pendingDiffCode) return;
-      current.files[activeFileName] = pendingDiffCode;
-      captureSnapshot();
-      pendingDiffCode = null;
-      document.getElementById("diff-banner").style.display = "none";
-      renderSandboxPreview();
-    }
-
-    function rejectDiff() {
-      document.getElementById("code-editor").value = preDiffSnapshot;
-      pendingDiffCode = null;
-      document.getElementById("diff-banner").style.display = "none";
     }
 
     function exportProject() {
@@ -1111,17 +1113,14 @@
           const data = await res.json();
           if (data.error) throw new Error(data.error.message || "Failed to load OpenRouter models");
 
-          // Exclude brands that already have dedicated native slots in OmniModel
           const excludedBrands = ["google", "openai", "anthropic"];
-
           const groups = {};
+
           data.data.forEach(m => {
             const parts = m.id.split("/");
-            // Strip out tildes, slashes, or special symbols: "~openai" -> "openai"
             const rawBrand = parts.length > 1 ? parts[0] : "other";
             const cleanBrand = rawBrand.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
 
-            // Skip if it matches Google, OpenAI, or Anthropic/Claude
             if (excludedBrands.includes(cleanBrand)) return;
 
             if (!groups[cleanBrand]) groups[cleanBrand] = [];
@@ -1130,7 +1129,6 @@
 
           modelSelect.innerHTML = "";
 
-          // Put top independent coding labs at the top
           const priorityBrands = ["deepseek", "meta-llama", "qwen", "mistralai", "cohere", "nousresearch", "x-ai", "moonshotai"];
           const brandKeys = Object.keys(groups).sort((a, b) => {
             const idxA = priorityBrands.indexOf(a);
@@ -1310,7 +1308,21 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
 
         const codeMatch = reply.match(/```[a-zA-Z]*\s*([\s\S]*?)\s*```/);
         if (codeMatch && codeMatch[1]) {
-          promptDiffReview(codeMatch[1].trim());
+          const generatedCode = codeMatch[1].trim();
+
+          // 1. History rollback snapshot
+          captureSnapshot();
+
+          // 2. Auto-load code into active file & editor
+          current.files[activeFileName] = generatedCode;
+          document.getElementById("code-editor").value = generatedCode;
+          saveSessions();
+
+          // 3. Mount into live sandbox
+          renderSandboxPreview();
+
+          // 4. Trigger autonomous sandbox check & 1-tap push
+          triggerAutonomousVerification();
         }
         saveSessions();
 
