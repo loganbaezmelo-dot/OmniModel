@@ -94,7 +94,6 @@
       font-weight: 500;
     }
 
-    /* Sidebar Drawer */
     #sidebar-overlay {
       position: fixed;
       inset: 0;
@@ -163,7 +162,6 @@
       cursor: pointer;
     }
 
-    /* GitHub Section in Sidebar */
     .sidebar-section {
       padding: 12px;
       border-top: 1px solid var(--border);
@@ -199,7 +197,6 @@
       font-size: 12px;
     }
 
-    /* Rules inside Sidebar */
     .rules-textarea {
       width: 100%;
       height: 60px;
@@ -214,7 +211,6 @@
       font-family: monospace;
     }
 
-    /* Tabs (Mobile only) */
     .nav-tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -235,7 +231,6 @@
       font-weight: 600;
     }
 
-    /* Workspace Panels */
     main {
       flex: 1;
       position: relative;
@@ -263,7 +258,6 @@
       align-items: center;
     }
 
-    /* Diff Review Banner */
     #diff-banner {
       display: none;
       padding: 8px 12px;
@@ -289,7 +283,6 @@
       font-size: 12px;
     }
 
-    /* Runtime Error Banner */
     #error-banner {
       display: none;
       padding: 8px 12px;
@@ -396,7 +389,6 @@
       background: #ffffff;
     }
 
-    /* Desktop View */
     @media (min-width: 900px) {
       .nav-tabs {
         display: none;
@@ -431,7 +423,6 @@
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
 
-    <!-- GitHub Integration Panel -->
     <div class="sidebar-section">
       <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
@@ -445,7 +436,6 @@
       </div>
     </div>
     
-    <!-- Cursorrules Config -->
     <div class="sidebar-section">
       <h4>Global Rules (.cursorrules)</h4>
       <textarea id="rules-input" class="rules-textarea" placeholder="e.g. Always use Tailwind CSS, mobile responsive..." oninput="saveRules()"></textarea>
@@ -535,7 +525,6 @@
     let lastCapturedError = null;
     let currentFileSha = null;
 
-    // --- GitHub Configuration & REST Sync ---
     function loadGhConfig() {
       document.getElementById("gh-token").value = localStorage.getItem("omni_gh_token") || "";
       document.getElementById("gh-repo").value = localStorage.getItem("omni_gh_repo") || "";
@@ -604,7 +593,6 @@
       statusText.innerText = "Pushing commit to GitHub...";
 
       try {
-        // Fetch current SHA if not cached
         if (!currentFileSha) {
           const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
             headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
@@ -645,7 +633,6 @@
       }
     }
 
-    // --- Cursorrules Management ---
     function loadRules() {
       const rules = localStorage.getItem("omni_cursorrules") || "Always write clean, self-contained HTML/CSS/JS in a single file with responsive design.";
       document.getElementById("rules-input").value = rules;
@@ -654,7 +641,6 @@
       localStorage.setItem("omni_cursorrules", document.getElementById("rules-input").value);
     }
 
-    // --- Sessions Management ---
     function saveSessions() {
       localStorage.setItem("omni_sessions", JSON.stringify(sessions));
       localStorage.setItem("omni_active_session_id", activeSessionId);
@@ -770,7 +756,6 @@
       saveSessions();
     }
 
-    // --- Live Sandbox with Error Injection & Inspector Hook ---
     function renderSandboxPreview(rawHtml) {
       document.getElementById("error-banner").style.display = "none";
       const iframe = document.getElementById("preview-frame");
@@ -929,6 +914,12 @@
       document.getElementById("view-" + name).classList.add("active");
     }
 
+    // Helper: Parse numerical version from GPT model strings (e.g., "gpt-5.6-turbo" -> 5.6, "gpt-6" -> 6.0)
+    function extractGptVersion(id) {
+      const match = id.match(/gpt-(\d+(?:\.\d+)?)/i);
+      return match ? parseFloat(match[1]) : 0;
+    }
+
     async function fetchModels() {
       const provider = document.getElementById("provider-select").value;
       const key = document.getElementById("api-key-input").value.trim();
@@ -964,10 +955,17 @@
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
+
+          // Extract all gpt models and sort descending by numeric version
           models = data.data
             .map(m => m.id)
-            .filter(id => id.includes("gpt"))
-            .sort((a, b) => b.localeCompare(a));
+            .filter(id => id.toLowerCase().includes("gpt"))
+            .sort((a, b) => {
+              const verA = extractGptVersion(a);
+              const verB = extractGptVersion(b);
+              if (verB !== verA) return verB - verA; // Highest version first
+              return b.localeCompare(a);
+            });
         } else if (provider === "claude") {
           const res = await fetch("https://api.anthropic.com/v1/models", {
             headers: {
@@ -978,7 +976,7 @@
           });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
-          models = data.data ? data.data.map(m => m.id) : ["claude-3-5-sonnet-latest", "claude-3-opus-latest"];
+          models = data.data ? data.data.map(m => m.id) : ["claude-fable-5.1", "claude-3-5-sonnet-latest"];
         }
 
         modelSelect.innerHTML = "";
@@ -991,11 +989,23 @@
           modelSelect.appendChild(opt);
         });
 
-        const targetModel = models.find(m => m === "gemini-pro-latest")
-                         || models.find(m => m.includes("pro-latest"))
-                         || models.find(m => m.includes("pro"))
-                         || models.find(m => m.includes("flash"))
-                         || models[0];
+        // Smart selector prioritization
+        let targetModel = null;
+        if (provider === "gemini") {
+          targetModel = models.find(m => m === "gemini-pro-latest")
+                     || models.find(m => m.includes("pro-latest"))
+                     || models.find(m => m.includes("pro"))
+                     || models.find(m => m.includes("flash"))
+                     || models[0];
+        } else if (provider === "openai") {
+          // Grabs the largest parsed version found at the top of the sorted list
+          targetModel = models[0];
+        } else if (provider === "claude") {
+          // Keeps Claude Fable 5.1 target
+          targetModel = models.find(m => m.includes("fable-5.1") || m.includes("fable"))
+                     || models.find(m => m.includes("sonnet"))
+                     || models[0];
+        }
 
         if (targetModel) modelSelect.value = targetModel;
 
