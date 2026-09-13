@@ -509,7 +509,7 @@
       <div class="input-row">
         <input type="file" id="file-uploader" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
         <button class="media-btn" title="Attach wireframe or UI screenshot" onclick="document.getElementById('file-uploader').click()">📎</button>
-        <button id="voice-btn" class="media-btn" title="Click to speak (Double click for Auto-Send)" onclick="toggleVoiceInput()" ondblclick="toggleVoiceAutoSend()">🎙️</button>
+        <button id="voice-btn" class="media-btn auto-send-active" title="Voice Auto-Send: Active ⚡" onclick="toggleVoiceInput()">🎙️</button>
         <textarea id="prompt-input" placeholder="Prompt AI to code, edit, or fix..."></textarea>
         <button id="send-btn" onclick="sendMessage()">Send</button>
       </div>
@@ -593,7 +593,7 @@
     let speechRecognizer = null;
     let isRecording = false;
     let voiceDispatchTimer = null;
-    let isVoiceAutoSend = localStorage.getItem("omni_voice_autosend") === "true";
+    let lastRecognizedText = "";
     let consoleLogCount = 0;
 
     window.addEventListener("online", () => {
@@ -688,24 +688,6 @@
       renderSandboxPreview();
     }
 
-    function toggleVoiceAutoSend() {
-      isVoiceAutoSend = !isVoiceAutoSend;
-      localStorage.setItem("omni_voice_autosend", isVoiceAutoSend);
-      updateVoiceBtnStyle();
-      alert(`Voice Auto-Send: ${isVoiceAutoSend ? "ENABLED ⚡" : "DISABLED"}`);
-    }
-
-    function updateVoiceBtnStyle() {
-      const btn = document.getElementById("voice-btn");
-      if (isVoiceAutoSend) {
-        btn.classList.add("auto-send-active");
-        btn.title = "Voice Auto-Send: Active ⚡ (Double-click to disable)";
-      } else {
-        btn.classList.remove("auto-send-active");
-        btn.title = "Click to speak (Double-click for Auto-Send)";
-      }
-    }
-
     function toggleVoiceInput() {
       const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!Speech) return alert("Speech recognition not supported in this browser.");
@@ -725,7 +707,8 @@
       speechRecognizer.interimResults = true;
       speechRecognizer.lang = "en-US";
 
-      let finalTranscript = "";
+      lastRecognizedText = "";
+      let basePrompt = promptInput.value.trim();
 
       speechRecognizer.onstart = () => {
         isRecording = true;
@@ -734,26 +717,29 @@
 
       speechRecognizer.onresult = (evt) => {
         let interim = "";
-        finalTranscript = "";
+        let finalStr = "";
 
         for (let i = 0; i < evt.results.length; ++i) {
           if (evt.results[i].isFinal) {
-            finalTranscript += evt.results[i][0].transcript;
+            finalStr += evt.results[i][0].transcript;
           } else {
             interim += evt.results[i][0].transcript;
           }
         }
 
-        const currentText = (finalTranscript || interim).trim();
-        if (currentText) {
-          promptInput.value = currentText;
+        const spoken = (finalStr || interim).trim();
+        if (spoken) {
+          lastRecognizedText = spoken;
+          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
 
-        if (isVoiceAutoSend && currentText.length > 0) {
+        if (lastRecognizedText.length > 0) {
           voiceDispatchTimer = setTimeout(() => {
-            if (speechRecognizer) speechRecognizer.stop();
+            if (speechRecognizer) {
+              speechRecognizer.stop();
+            }
           }, 1100);
         }
       };
@@ -770,9 +756,14 @@
         btn.classList.remove("recording");
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
 
-        const promptToSend = promptInput.value.trim();
-        if (isVoiceAutoSend && promptToSend.length > 0) {
-          sendMessage();
+        if (!promptInput.value.trim() && lastRecognizedText) {
+          promptInput.value = lastRecognizedText;
+        }
+
+        if (promptInput.value.trim().length > 0) {
+          setTimeout(() => {
+            sendMessage();
+          }, 150);
         }
       };
 
@@ -1646,7 +1637,6 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
 
     loadRules();
     loadGhConfig();
-    updateVoiceBtnStyle();
 
     if (!sessions.length) {
       createNewSession();
