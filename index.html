@@ -10,9 +10,12 @@
       --card: #1a1d26;
       --border: #2e3444;
       --accent: #6366f1;
+      --accent-hover: #4f46e5;
       --text: #f3f4f6;
       --muted: #9ca3af;
       --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -62,6 +65,9 @@
       border: 1px solid var(--border);
       color: var(--text);
     }
+    .export-btn {
+      background: #10b981;
+    }
     .status-row {
       display: flex;
       justify-content: space-between;
@@ -89,6 +95,7 @@
       font-weight: 500;
     }
 
+    /* Sidebar Drawer */
     #sidebar-overlay {
       position: fixed;
       inset: 0;
@@ -102,7 +109,7 @@
       top: 0;
       bottom: 0;
       left: 0;
-      width: 280px;
+      width: 300px;
       background: var(--card);
       border-right: 1px solid var(--border);
       z-index: 100;
@@ -157,6 +164,35 @@
       cursor: pointer;
     }
 
+    /* Rules Drawer inside Sidebar */
+    .sidebar-rules-section {
+      padding: 14px;
+      border-top: 1px solid var(--border);
+      background: #151821;
+    }
+    .sidebar-rules-section h4 {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .rules-textarea {
+      width: 100%;
+      height: 80px;
+      background: #252a36;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      resize: none;
+      outline: none;
+      font-family: monospace;
+    }
+
     /* Tabs (Mobile only) */
     .nav-tabs {
       display: flex;
@@ -202,6 +238,53 @@
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Diff Review Banner */
+    #diff-banner {
+      display: none;
+      padding: 8px 12px;
+      background: #1e293b;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      gap: 10px;
+    }
+    .diff-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-apply {
+      background: var(--success);
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    .btn-discard {
+      background: var(--danger);
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
+    /* Runtime Error Banner */
+    #error-banner {
+      display: none;
+      padding: 8px 12px;
+      background: rgba(239, 68, 68, 0.2);
+      border-bottom: 1px solid var(--danger);
+      color: #fca5a5;
+      font-size: 12px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    #error-banner button {
+      background: var(--danger);
+      padding: 4px 10px;
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     #chat-history {
@@ -263,9 +346,31 @@
       outline: none;
     }
 
+    .preview-toolbar {
+      padding: 6px 12px;
+      background: #151821;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .inspect-toggle-btn {
+      padding: 4px 10px;
+      font-size: 12px;
+      background: #252a36;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .inspect-toggle-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
     #preview-frame {
       width: 100%;
-      height: 100%;
+      flex: 1;
       border: none;
       background: #ffffff;
     }
@@ -297,6 +402,7 @@
 </head>
 <body>
 
+  <!-- Overlay & Sidebar -->
   <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside id="sidebar">
     <div class="sidebar-header">
@@ -304,6 +410,12 @@
       <button onclick="createNewSession()">+ New</button>
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
+    
+    <!-- .cursorrules Config -->
+    <div class="sidebar-rules-section">
+      <h4>Global Rules (.cursorrules) <span style="font-size:10px; color:var(--success);">Saved</span></h4>
+      <textarea id="rules-input" class="rules-textarea" placeholder="e.g. Always use Tailwind CSS, mobile-first design, modern animations..." oninput="saveRules()"></textarea>
+    </div>
   </aside>
 
   <header>
@@ -319,6 +431,7 @@
       <select id="model-select" style="max-width: 150px;">
         <option value="">(No models)</option>
       </select>
+      <button class="export-btn" onclick="exportProject()">Export ⤓</button>
     </div>
     <div class="status-row">
       <div class="status">
@@ -336,6 +449,7 @@
   </nav>
 
   <main>
+    <!-- Chat View -->
     <div id="view-chat" class="view-panel active">
       <div class="panel-header">AI Chat</div>
       <div id="chat-history"></div>
@@ -345,14 +459,31 @@
       </div>
     </div>
 
+    <!-- Code View with Diff Controls -->
     <div id="view-code" class="view-panel">
       <div class="panel-header">Current Code</div>
+      <div id="diff-banner">
+        <span>⚠️ Generated Changes Pending</span>
+        <div class="diff-actions">
+          <button class="btn-apply" onclick="acceptDiff()">Apply</button>
+          <button class="btn-discard" onclick="rejectDiff()">Discard</button>
+        </div>
+      </div>
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
+    <!-- Preview View with Inspector & Error Catcher -->
     <div id="view-preview" class="view-panel">
       <div class="panel-header">Live Preview</div>
-      <iframe id="preview-frame"></iframe>
+      <div class="preview-toolbar">
+        <span>Sandbox Canvas</span>
+        <button id="inspect-toggle-btn" class="inspect-toggle-btn" onclick="toggleInspector()">🔍 Inspect Element</button>
+      </div>
+      <div id="error-banner">
+        <span id="error-banner-text">Error occurred</span>
+        <button onclick="fixCurrentError()">Fix with AI 🪄</button>
+      </div>
+      <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
     </div>
   </main>
 
@@ -367,7 +498,22 @@
 
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
     let activeSessionId = localStorage.getItem("omni_active_session_id") || null;
+    let pendingDiffCode = null;
+    let preDiffSnapshot = null;
+    let isInspectorActive = false;
+    let lastCapturedError = null;
 
+    // --- Cursorrules Management ---
+    function loadRules() {
+      const rules = localStorage.getItem("omni_cursorrules") || "Always write clean, self-contained HTML/CSS/JS in a single file with responsive design.";
+      document.getElementById("rules-input").value = rules;
+    }
+    function saveRules() {
+      const val = document.getElementById("rules-input").value;
+      localStorage.setItem("omni_cursorrules", val);
+    }
+
+    // --- Sessions Management ---
     function saveSessions() {
       localStorage.setItem("omni_sessions", JSON.stringify(sessions));
       localStorage.setItem("omni_active_session_id", activeSessionId);
@@ -417,6 +563,9 @@
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
+      pendingDiffCode = null;
+      document.getElementById("diff-banner").style.display = "none";
+      document.getElementById("error-banner").style.display = "none";
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -427,6 +576,9 @@
 
     function switchSession(id) {
       activeSessionId = id;
+      pendingDiffCode = null;
+      document.getElementById("diff-banner").style.display = "none";
+      document.getElementById("error-banner").style.display = "none";
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -464,17 +616,154 @@
       historyDiv.scrollTop = historyDiv.scrollHeight;
 
       document.getElementById("code-editor").value = current.code;
-      document.getElementById("preview-frame").srcdoc = current.code;
+      renderSandboxPreview(current.code);
     }
 
     function onCodeManualEdit() {
       const current = getActiveSession();
       if (!current) return;
       current.code = document.getElementById("code-editor").value;
-      document.getElementById("preview-frame").srcdoc = current.code;
+      renderSandboxPreview(current.code);
       saveSessions();
     }
 
+    // --- Live Sandbox with Error Injection & Inspector Hook ---
+    function renderSandboxPreview(rawHtml) {
+      document.getElementById("error-banner").style.display = "none";
+      const iframe = document.getElementById("preview-frame");
+
+      // Inject error catcher + element inspector hook script directly
+      const injectedHooks = `
+        <script>
+          window.onerror = function(msg, url, line, col, error) {
+            window.parent.postMessage({ type: 'OMNI_RUNTIME_ERROR', error: msg + ' (Line ' + line + ')' }, '*');
+            return false;
+          };
+
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'OMNI_SET_INSPECT_MODE') {
+              window.__inspectActive = e.data.active;
+            }
+          });
+
+          let prevEl = null;
+          document.addEventListener('mouseover', function(e) {
+            if (!window.__inspectActive) return;
+            if (prevEl) prevEl.style.outline = '';
+            prevEl = e.target;
+            prevEl.style.outline = '2px dashed #6366f1';
+          }, true);
+
+          document.addEventListener('click', function(e) {
+            if (!window.__inspectActive) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (prevEl) prevEl.style.outline = '';
+            const tag = e.target.tagName.toLowerCase();
+            const id = e.target.id ? '#' + e.target.id : '';
+            const cls = e.target.className ? '.' + String(e.target.className).trim().replace(/\\s+/g, '.') : '';
+            const snippet = e.target.outerHTML.slice(0, 180);
+            window.parent.postMessage({ 
+              type: 'OMNI_ELEMENT_INSPECTED', 
+              selector: tag + id + cls,
+              outerHTML: snippet
+            }, '*');
+          }, true);
+        <\/script>
+      `;
+
+      iframe.srcdoc = rawHtml + injectedHooks;
+    }
+
+    // --- Message Listener from Iframe Sandbox ---
+    window.addEventListener("message", (e) => {
+      if (!e.data) return;
+
+      // Catch JavaScript Runtime Errors inside preview
+      if (e.data.type === "OMNI_RUNTIME_ERROR") {
+        lastCapturedError = e.data.error;
+        const banner = document.getElementById("error-banner");
+        document.getElementById("error-banner-text").innerText = `⚠️ ${lastCapturedError}`;
+        banner.style.display = "flex";
+      }
+
+      // Handle Element Inspector Pick
+      if (e.data.type === "OMNI_ELEMENT_INSPECTED") {
+        const input = document.getElementById("prompt-input");
+        input.value = `@element (${e.data.selector}):\n\`\`\`html\n${e.data.outerHTML}\n\`\`\`\nModify this element: `;
+        toggleInspector(false);
+        switchTab("chat");
+        input.focus();
+      }
+    });
+
+    // --- Element Inspector Toggle ---
+    function toggleInspector(forceState) {
+      isInspectorActive = forceState !== undefined ? forceState : !isInspectorActive;
+      const btn = document.getElementById("inspect-toggle-btn");
+      btn.classList.toggle("active", isInspectorActive);
+      btn.innerText = isInspectorActive ? "Cancel Inspect" : "🔍 Inspect Element";
+      
+      const iframe = document.getElementById("preview-frame");
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: "OMNI_SET_INSPECT_MODE", active: isInspectorActive }, "*");
+      }
+    }
+
+    // --- Fix With AI ---
+    function fixCurrentError() {
+      if (!lastCapturedError) return;
+      const promptInput = document.getElementById("prompt-input");
+      promptInput.value = `Fix this runtime console error occurring in the code:\n"${lastCapturedError}"`;
+      switchTab("chat");
+      sendMessage();
+    }
+
+    // --- Diff Review: Apply / Discard ---
+    function promptDiffReview(newCode) {
+      preDiffSnapshot = document.getElementById("code-editor").value;
+      pendingDiffCode = newCode;
+      document.getElementById("diff-banner").style.display = "flex";
+      document.getElementById("code-editor").value = newCode;
+      renderSandboxPreview(newCode);
+      switchTab("code");
+    }
+
+    function acceptDiff() {
+      const current = getActiveSession();
+      if (!current || !pendingDiffCode) return;
+      current.code = pendingDiffCode;
+      saveSessions();
+      pendingDiffCode = null;
+      document.getElementById("diff-banner").style.display = "none";
+      renderSandboxPreview(current.code);
+    }
+
+    function rejectDiff() {
+      const current = getActiveSession();
+      if (!current) return;
+      document.getElementById("code-editor").value = preDiffSnapshot;
+      renderSandboxPreview(preDiffSnapshot);
+      pendingDiffCode = null;
+      document.getElementById("diff-banner").style.display = "none";
+    }
+
+    // --- Export Project (.html) ---
+    function exportProject() {
+      const current = getActiveSession();
+      if (!current) return;
+      const blob = new Blob([current.code], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (current.title ? current.title.replace(/[^a-z0-9]/gi, "_").toLowerCase() : "index") + ".html";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Key / Model Providers ---
     function saveCurrentKey() {
       const provider = document.getElementById("provider-select").value;
       const key = document.getElementById("api-key-input").value.trim();
@@ -495,9 +784,7 @@
       document.getElementById("status-indicator").classList.remove("active");
       document.getElementById("status-text").innerText = "Key loaded. Click Connect.";
 
-      if (keyInput.value) {
-        fetchModels();
-      }
+      if (keyInput.value) fetchModels();
     }
 
     function switchTab(name) {
@@ -506,10 +793,6 @@
       });
       document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
       document.getElementById("view-" + name).classList.add("active");
-      if (name === "preview") {
-        const current = getActiveSession();
-        if (current) document.getElementById("preview-frame").srcdoc = current.code;
-      }
     }
 
     async function fetchModels() {
@@ -603,6 +886,7 @@
       const provider = document.getElementById("provider-select").value;
       const model = document.getElementById("model-select").value;
       const current = getActiveSession();
+      const customRules = localStorage.getItem("omni_cursorrules") || "";
 
       if (!prompt) return;
       if (!key || !model) return alert("Please connect your API key and select a model first.");
@@ -619,6 +903,9 @@
       saveSessions();
 
       const systemPrompt = `You are a frontend web development assistant.
+Project Rules (.cursorrules):
+${customRules}
+
 You MUST output full, self-contained HTML (including CSS and JavaScript inside <style> and <script> tags).
 Return ONLY the raw HTML code block enclosed in triple backticks (\`\`\`html ... \`\`\`) with a brief explanation.
 Here is the current HTML code the user has in the editor right now:
@@ -688,9 +975,7 @@ ${current.code}
 
         const codeMatch = reply.match(/```html\s*([\s\S]*?)\s*```/) || reply.match(/```\s*([\s\S]*?)\s*```/);
         if (codeMatch && codeMatch[1]) {
-          current.code = codeMatch[1].trim();
-          document.getElementById("code-editor").value = current.code;
-          document.getElementById("preview-frame").srcdoc = current.code;
+          promptDiffReview(codeMatch[1].trim());
         }
         saveSessions();
 
@@ -707,6 +992,8 @@ ${current.code}
       history.appendChild(msg);
       history.scrollTop = history.scrollHeight;
     }
+
+    loadRules();
 
     if (!sessions.length) {
       createNewSession();
