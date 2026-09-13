@@ -89,7 +89,6 @@
       font-weight: 500;
     }
 
-    /* Sidebar Drawer */
     #sidebar-overlay {
       position: fixed;
       inset: 0;
@@ -260,7 +259,6 @@
 </head>
 <body>
 
-  <!-- Overlay & Sidebar -->
   <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside id="sidebar">
     <div class="sidebar-header">
@@ -410,7 +408,6 @@
       const current = getActiveSession();
       if (!current) return;
 
-      // Render chat history
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
       current.messages.forEach(m => {
@@ -421,7 +418,6 @@
       });
       historyDiv.scrollTop = historyDiv.scrollHeight;
 
-      // Render Code & Preview
       document.getElementById("code-editor").value = current.code;
       document.getElementById("preview-frame").srcdoc = current.code;
     }
@@ -533,8 +529,9 @@
           modelSelect.appendChild(opt);
         });
 
-        const targetModel = models.find(m => m === "gemini-2.5-flash")
-                         || models.find(m => m === "gemini-flash-latest")
+        const targetModel = models.find(m => m === "gemini-pro-latest")
+                         || models.find(m => m.includes("pro-latest"))
+                         || models.find(m => m.includes("pro"))
                          || models.find(m => m.includes("flash"))
                          || models[0];
 
@@ -566,7 +563,6 @@
       if (!key || !model) return alert("Please connect your API key and select a model first.");
       if (!current) return;
 
-      // Update session title on first user prompt
       if (!current.messages.length) {
         current.title = prompt.slice(0, 24) + (prompt.length > 24 ? "..." : "");
         renderSidebar();
@@ -667,7 +663,6 @@ ${current.code}
       history.scrollTop = history.scrollHeight;
     }
 
-    // Initialize initial session if none exist
     if (!sessions.length) {
       createNewSession();
     } else {
