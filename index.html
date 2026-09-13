@@ -592,8 +592,7 @@
     let attachedImage = null;
     let speechRecognizer = null;
     let isRecording = false;
-    let silenceTimer = null;
-    let finalVoiceBuffer = "";
+    let voiceDispatchTimer = null;
     let isVoiceAutoSend = localStorage.getItem("omni_voice_autosend") === "true";
     let consoleLogCount = 0;
 
@@ -711,21 +710,22 @@
       const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!Speech) return alert("Speech recognition not supported in this browser.");
       const btn = document.getElementById("voice-btn");
-      
+      const promptInput = document.getElementById("prompt-input");
+
       if (isRecording) {
-        if (silenceTimer) clearTimeout(silenceTimer);
+        if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
         if (speechRecognizer) speechRecognizer.stop();
+        isRecording = false;
+        btn.classList.remove("recording");
         return;
       }
 
       speechRecognizer = new Speech();
-      speechRecognizer.continuous = true;
+      speechRecognizer.continuous = false;
       speechRecognizer.interimResults = true;
       speechRecognizer.lang = "en-US";
 
-      const promptInput = document.getElementById("prompt-input");
-      const basePrompt = promptInput.value.trim();
-      finalVoiceBuffer = "";
+      let finalTranscript = "";
 
       speechRecognizer.onstart = () => {
         isRecording = true;
@@ -733,49 +733,45 @@
       };
 
       speechRecognizer.onresult = (evt) => {
-        let interimText = "";
-        let finalSegment = "";
+        let interim = "";
+        finalTranscript = "";
 
-        for (let i = evt.resultIndex; i < evt.results.length; ++i) {
+        for (let i = 0; i < evt.results.length; ++i) {
           if (evt.results[i].isFinal) {
-            finalSegment += evt.results[i][0].transcript;
+            finalTranscript += evt.results[i][0].transcript;
           } else {
-            interimText += evt.results[i][0].transcript;
+            interim += evt.results[i][0].transcript;
           }
         }
 
-        if (finalSegment) {
-          finalVoiceBuffer += (finalVoiceBuffer ? " " : "") + finalSegment.trim();
+        const currentText = (finalTranscript || interim).trim();
+        if (currentText) {
+          promptInput.value = currentText;
         }
 
-        const currentSpoken = (finalVoiceBuffer + " " + interimText).trim();
-        promptInput.value = basePrompt ? `${basePrompt} ${currentSpoken}` : currentSpoken;
+        if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
 
-        // Reset silence detection timer
-        if (silenceTimer) clearTimeout(silenceTimer);
-
-        if (isVoiceAutoSend && currentSpoken.length > 0) {
-          // If silence lasts 1.2s, finish and dispatch
-          silenceTimer = setTimeout(() => {
-            if (speechRecognizer && isRecording) {
-              speechRecognizer.stop();
-            }
-          }, 1200);
+        if (isVoiceAutoSend && currentText.length > 0) {
+          voiceDispatchTimer = setTimeout(() => {
+            if (speechRecognizer) speechRecognizer.stop();
+          }, 1100);
         }
       };
 
       speechRecognizer.onerror = (e) => {
         console.error("Speech Error:", e);
-        if (silenceTimer) clearTimeout(silenceTimer);
+        if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
+        isRecording = false;
+        btn.classList.remove("recording");
       };
 
       speechRecognizer.onend = () => {
         isRecording = false;
         btn.classList.remove("recording");
-        if (silenceTimer) clearTimeout(silenceTimer);
+        if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
 
-        // Immediate dispatch on silence completion
-        if (isVoiceAutoSend && promptInput.value.trim().length > 0) {
+        const promptToSend = promptInput.value.trim();
+        if (isVoiceAutoSend && promptToSend.length > 0) {
           sendMessage();
         }
       };
