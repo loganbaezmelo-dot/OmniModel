@@ -1215,11 +1215,18 @@
 
     function exportProject() {
       const current = getActiveSession();
-      if (!current) return;
-      const blob = new Blob([current.files["index.html"]], { type: "text/html;charset=utf-8" });
+      if (!current || !current.files) return;
+      
+      const fileName = current.files["index.html"] ? "index.html" : (activeFileName || "index.html");
+      const fileContent = current.files[fileName] || "";
+      
+      const mimeType = fileName.endsWith(".css") ? "text/css" :
+                       fileName.endsWith(".js") ? "text/javascript" : "text/html";
+                       
+      const blob = new Blob([fileContent], { type: `${mimeType};charset=utf-8` });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = (current.title ? current.title.replace(/[^a-z0-9]/gi, "_").toLowerCase() : "index") + ".html";
+      a.download = fileName;
       a.click();
     }
 
