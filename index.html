@@ -1111,17 +1111,22 @@
           const data = await res.json();
           if (data.error) throw new Error(data.error.message || "Failed to load OpenRouter models");
 
-          // Group by organization prefix (e.g., deepseek/..., meta-llama/...)
+          // Exclude brands that already have dedicated native provider slots in OmniModel
+          const excludedBrands = ["google", "openai", "anthropic"];
+
           const groups = {};
           data.data.forEach(m => {
             const parts = m.id.split("/");
-            const brand = parts.length > 1 ? parts[0] : "other";
+            const brand = parts.length > 1 ? parts[0].toLowerCase() : "other";
+
+            if (excludedBrands.includes(brand)) return;
+
             if (!groups[brand]) groups[brand] = [];
             groups[brand].push(m.id);
           });
 
           modelSelect.innerHTML = "";
-          const priorityBrands = ["deepseek", "meta-llama", "qwen", "mistralai", "anthropic", "openai", "google"];
+          const priorityBrands = ["deepseek", "meta-llama", "qwen", "mistralai", "cohere", "nousresearch"];
           const brandKeys = Object.keys(groups).sort((a, b) => {
             const idxA = priorityBrands.indexOf(a);
             const idxB = priorityBrands.indexOf(b);
@@ -1145,8 +1150,9 @@
 
           const defaultTarget = 
             data.data.find(m => m.id.includes("deepseek/deepseek-chat") || m.id.includes("deepseek-r1"))?.id ||
-            data.data.find(m => m.id.includes("qwen-2.5-coder"))?.id ||
-            data.data[0]?.id;
+            data.data.find(m => m.id.includes("qwen-2.5-coder") || m.id.includes("qwen"))?.id ||
+            data.data.find(m => m.id.includes("llama-3.3") || m.id.includes("llama"))?.id ||
+            modelSelect.querySelector("option")?.value;
 
           if (defaultTarget) modelSelect.value = defaultTarget;
 
