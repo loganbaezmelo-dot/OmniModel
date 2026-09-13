@@ -48,6 +48,16 @@
       font-size: 14px;
       outline: none;
     }
+    optgroup {
+      background: #1a1d26;
+      color: var(--accent);
+      font-weight: bold;
+    }
+    option {
+      background: #252a36;
+      color: var(--text);
+      font-weight: normal;
+    }
     input[type="password"], input[type="text"] { flex: 1; min-width: 130px; }
     button {
       background: var(--accent);
@@ -227,23 +237,11 @@
       color: #fff;
       border-color: var(--accent);
     }
-    .file-pill-del {
-      font-size: 11px;
-      opacity: 0.7;
-    }
+    .file-pill-del { font-size: 11px; opacity: 0.7; }
     .file-pill-del:hover { opacity: 1; }
 
-    /* Time Machine Toolbar */
-    .history-controls {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .history-btn {
-      padding: 2px 8px;
-      font-size: 11px;
-      background: #252a36;
-    }
+    .history-controls { display: flex; align-items: center; gap: 4px; }
+    .history-btn { padding: 2px 8px; font-size: 11px; background: #252a36; }
 
     /* Diff Review Banner */
     #diff-banner {
@@ -339,7 +337,6 @@
       outline: none;
     }
 
-    /* Preview Canvas Area */
     .preview-container {
       flex: 1;
       background: #1e222d;
@@ -364,10 +361,7 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    .viewport-pill.active {
-      background: var(--accent);
-      color: #fff;
-    }
+    .viewport-pill.active { background: var(--accent); color: #fff; }
 
     @media (min-width: 900px) {
       .nav-tabs { display: none; }
@@ -413,10 +407,12 @@
         <option value="gemini">Gemini</option>
         <option value="openai">OpenAI</option>
         <option value="claude">Claude</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="groq">Groq</option>
       </select>
       <input type="password" id="api-key-input" placeholder="Enter API Key" oninput="saveCurrentKey()">
       <button onclick="fetchModels()">Connect</button>
-      <select id="model-select" style="max-width: 150px;">
+      <select id="model-select" style="max-width: 170px;">
         <option value="">(No models)</option>
       </select>
       <button class="export-btn" onclick="exportProject()">Export ⤓</button>
@@ -442,14 +438,14 @@
       <div class="panel-header">
         <span>AI Assistant</span>
         <div class="history-controls">
-          <button class="history-btn" onclick="undoSnapshot()" title="Rollback last edit">↩ Undo</button>
+          <button class="history-btn" onclick="undoSnapshot()" title="Rollback edit">↩ Undo</button>
           <button class="history-btn" onclick="redoSnapshot()" title="Redo edit">↪ Redo</button>
         </div>
       </div>
       <div id="chat-history"></div>
       
       <div id="image-preview-bar" class="image-preview-bar">
-        <img id="attached-thumb" src="" alt="Attached Image">
+        <img id="attached-thumb" src="" alt="Attached Preview">
         <span id="attached-name">image.png</span>
         <button class="icon-btn" style="padding:2px 6px;" onclick="clearAttachedImage()">×</button>
       </div>
@@ -470,7 +466,6 @@
         <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="promptNewFile()">+ File</button>
       </div>
       
-      <!-- Virtual File Tree -->
       <div id="file-tree-bar" class="file-tree-bar"></div>
 
       <div id="diff-banner">
@@ -490,7 +485,6 @@
           <span>Canvas</span>
           <button id="inspect-toggle-btn" class="icon-btn" style="padding:2px 6px; font-size:11px;" onclick="toggleInspector()">🔍 Inspect</button>
         </div>
-        <!-- Viewport Switcher -->
         <div style="display:flex; gap:4px;">
           <button class="viewport-pill" onclick="setViewport('375px', this)">📱 375</button>
           <button class="viewport-pill" onclick="setViewport('768px', this)">💻 768</button>
@@ -517,7 +511,9 @@
     const KEY_LINKS = {
       gemini: { text: "Get Gemini API Key ↗", url: "https://aistudio.google.com/app/apikey" },
       openai: { text: "Get OpenAI API Key ↗", url: "https://platform.openai.com/api-keys" },
-      claude: { text: "Get Claude API Key ↗", url: "https://console.anthropic.com/settings/keys" }
+      claude: { text: "Get Claude API Key ↗", url: "https://console.anthropic.com/settings/keys" },
+      openrouter: { text: "Get OpenRouter Key ↗", url: "https://openrouter.ai/keys" },
+      groq: { text: "Get Groq API Key ↗", url: "https://console.groq.com/keys" }
     };
 
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
@@ -528,18 +524,15 @@
     let isInspectorActive = false;
     let lastCapturedError = null;
     let currentFileSha = null;
-    let attachedImage = null; // { base64, mimeType, name }
+    let attachedImage = null;
     let speechRecognizer = null;
     let isRecording = false;
 
-    // --- Time Machine Snapshots ---
     function captureSnapshot() {
       const current = getActiveSession();
       if (!current) return;
       if (!current.history) current.history = [];
       if (current.historyIdx === undefined) current.historyIdx = -1;
-
-      // Drop forward history if we were rewound
       current.history = current.history.slice(0, current.historyIdx + 1);
       current.history.push(JSON.parse(JSON.stringify(current.files)));
       current.historyIdx = current.history.length - 1;
@@ -566,21 +559,17 @@
       renderSandboxPreview();
     }
 
-    // --- Voice-to-Code Input ---
     function toggleVoiceInput() {
       const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!Speech) return alert("Speech recognition is not supported in this browser.");
-
+      if (!Speech) return alert("Speech recognition not supported in this browser.");
       const btn = document.getElementById("voice-btn");
       if (isRecording) {
         speechRecognizer.stop();
         return;
       }
-
       speechRecognizer = new Speech();
       speechRecognizer.continuous = false;
       speechRecognizer.interimResults = false;
-
       speechRecognizer.onstart = () => {
         isRecording = true;
         btn.classList.add("recording");
@@ -590,26 +579,22 @@
         const input = document.getElementById("prompt-input");
         input.value = (input.value ? input.value + " " : "") + transcript;
       };
-      speechRecognizer.onerror = (e) => console.error("Speech Error: ", e);
+      speechRecognizer.onerror = (e) => console.error("Speech Error:", e);
       speechRecognizer.onend = () => {
         isRecording = false;
         btn.classList.remove("recording");
       };
-
       speechRecognizer.start();
     }
 
-    // --- Image / Wireframe Attachment ---
     function handleImageUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (evt) => {
         const dataUrl = evt.target.result;
         const [meta, base64] = dataUrl.split(",");
         const mimeType = meta.match(/:(.*?);/)[1];
-
         attachedImage = { base64, mimeType, name: file.name, dataUrl };
         document.getElementById("attached-thumb").src = dataUrl;
         document.getElementById("attached-name").innerText = file.name;
@@ -624,15 +609,12 @@
       document.getElementById("image-preview-bar").style.display = "none";
     }
 
-    // --- Multi-Device Viewport Switcher ---
     function setViewport(width, btn) {
       document.querySelectorAll(".viewport-pill").forEach(p => p.classList.remove("active"));
       btn.classList.add("active");
-      const frame = document.getElementById("preview-frame");
-      frame.style.width = width;
+      document.getElementById("preview-frame").style.width = width;
     }
 
-    // --- Multi-File Virtual Tree ---
     function renderFileTree() {
       const current = getActiveSession();
       const treeBar = document.getElementById("file-tree-bar");
@@ -668,7 +650,7 @@
     }
 
     function promptNewFile() {
-      const name = window.prompt("New File Name (e.g. app.js, components.css):");
+      const name = window.prompt("New File Name (e.g. app.js, styles.css):");
       if (!name) return;
       const current = getActiveSession();
       if (!current.files[name]) {
@@ -702,7 +684,6 @@
       renderSandboxPreview();
     }
 
-    // --- GitHub Git-Sync ---
     function loadGhConfig() {
       document.getElementById("gh-token").value = localStorage.getItem("omni_gh_token") || "";
       document.getElementById("gh-repo").value = localStorage.getItem("omni_gh_repo") || "";
@@ -719,8 +700,8 @@
       const token = document.getElementById("gh-token").value.trim();
       const repo = document.getElementById("gh-repo").value.trim();
       const path = document.getElementById("gh-path").value.trim() || activeFileName;
-
-      if (!token || !repo || !path) return alert("Please fill in Token, Repo (owner/repo), and File Path.");
+      if (!token || !repo || !path) return alert("Please fill in Token, Repo, and File Path.");
+      
       const statusText = document.getElementById("status-text");
       statusText.innerText = `Pulling ${path}...`;
 
@@ -803,7 +784,6 @@
       }
     }
 
-    // --- Session Persistence ---
     function loadRules() {
       document.getElementById("rules-input").value = localStorage.getItem("omni_cursorrules") || "Always write modern, mobile-friendly code.";
     }
@@ -884,9 +864,7 @@
     function loadSessionUI() {
       const current = getActiveSession();
       if (!current) return;
-      if (!current.files) {
-        current.files = { "index.html": current.code || DEFAULT_PROJECT["index.html"] };
-      }
+      if (!current.files) current.files = { "index.html": current.code || DEFAULT_PROJECT["index.html"] };
       if (!current.history) {
         current.history = [JSON.parse(JSON.stringify(current.files))];
         current.historyIdx = 0;
@@ -912,7 +890,6 @@
       renderSandboxPreview();
     }
 
-    // --- In-Memory Sandbox Assembly ---
     function renderSandboxPreview() {
       document.getElementById("error-banner").style.display = "none";
       const current = getActiveSession();
@@ -920,7 +897,6 @@
 
       let html = current.files["index.html"] || "";
 
-      // Inline any linked virtual CSS and JS files directly for the iframe
       Object.keys(current.files).forEach(fn => {
         if (fn.endsWith(".css")) {
           const cssRegex = new RegExp(`<link[^>]+href=["']${fn}["'][^>]*>`, "gi");
@@ -1035,7 +1011,6 @@
       a.click();
     }
 
-    // --- Provider / Model Management ---
     function saveCurrentKey() {
       const provider = document.getElementById("provider-select").value;
       localStorage.setItem(`omni_key_${provider}`, document.getElementById("api-key-input").value.trim());
@@ -1073,9 +1048,11 @@
       if (!key) return;
       saveCurrentKey();
       statusText.innerText = "Discovering models...";
+      modelSelect.innerHTML = '<option value="">Loading...</option>';
 
       try {
         let models = [];
+
         if (provider === "gemini") {
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
           const data = await res.json();
@@ -1083,6 +1060,15 @@
           data.models.forEach(m => {
             if (m.supportedGenerationMethods?.includes("generateContent")) models.push(m.name.replace("models/", ""));
           });
+          modelSelect.innerHTML = "";
+          models.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m; opt.textContent = m;
+            modelSelect.appendChild(opt);
+          });
+          const target = models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
+          if (target) modelSelect.value = target;
+
         } else if (provider === "openai") {
           const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${key}` } });
           const data = await res.json();
@@ -1090,6 +1076,14 @@
           models = data.data.map(m => m.id).filter(id => id.toLowerCase().includes("gpt")).sort((a, b) => {
             return extractGptVersion(b) - extractGptVersion(a);
           });
+          modelSelect.innerHTML = "";
+          models.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m; opt.textContent = m;
+            modelSelect.appendChild(opt);
+          });
+          if (models[0]) modelSelect.value = models[0];
+
         } else if (provider === "claude") {
           const res = await fetch("https://api.anthropic.com/v1/models", {
             headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
@@ -1097,22 +1091,87 @@
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           models = data.data ? data.data.map(m => m.id) : ["claude-fable-5.1", "claude-3-5-sonnet-latest"];
-        }
+          modelSelect.innerHTML = "";
+          models.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m; opt.textContent = m;
+            modelSelect.appendChild(opt);
+          });
+          const target = models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
+          if (target) modelSelect.value = target;
 
-        modelSelect.innerHTML = "";
-        models.forEach(m => {
-          const opt = document.createElement("option");
-          opt.value = m; opt.textContent = m;
-          modelSelect.appendChild(opt);
-        });
+        } else if (provider === "openrouter") {
+          const res = await fetch("https://openrouter.ai/api/v1/models", {
+            headers: {
+              "Authorization": `Bearer ${key}`,
+              "HTTP-Referer": window.location.origin,
+              "X-Title": "Omni-Model Studio"
+            }
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message || "Failed to load OpenRouter models");
 
-        let target = models[0];
-        if (provider === "gemini") {
-          target = models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
-        } else if (provider === "claude") {
-          target = models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
+          // Group by organization prefix (e.g., deepseek/..., meta-llama/...)
+          const groups = {};
+          data.data.forEach(m => {
+            const parts = m.id.split("/");
+            const brand = parts.length > 1 ? parts[0] : "other";
+            if (!groups[brand]) groups[brand] = [];
+            groups[brand].push(m.id);
+          });
+
+          modelSelect.innerHTML = "";
+          const priorityBrands = ["deepseek", "meta-llama", "qwen", "mistralai", "anthropic", "openai", "google"];
+          const brandKeys = Object.keys(groups).sort((a, b) => {
+            const idxA = priorityBrands.indexOf(a);
+            const idxB = priorityBrands.indexOf(b);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return a.localeCompare(b);
+          });
+
+          brandKeys.forEach(brand => {
+            const optgroup = document.createElement("optgroup");
+            optgroup.label = brand.toUpperCase();
+            groups[brand].sort().forEach(id => {
+              const opt = document.createElement("option");
+              opt.value = id;
+              opt.textContent = id.split("/")[1] || id;
+              optgroup.appendChild(opt);
+            });
+            modelSelect.appendChild(optgroup);
+          });
+
+          const defaultTarget = 
+            data.data.find(m => m.id.includes("deepseek/deepseek-chat") || m.id.includes("deepseek-r1"))?.id ||
+            data.data.find(m => m.id.includes("qwen-2.5-coder"))?.id ||
+            data.data[0]?.id;
+
+          if (defaultTarget) modelSelect.value = defaultTarget;
+
+        } else if (provider === "groq") {
+          const res = await fetch("https://api.groq.com/openai/v1/models", {
+            headers: { "Authorization": `Bearer ${key}` }
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message);
+
+          models = data.data
+            .map(m => m.id)
+            .filter(id => !id.includes("whisper") && !id.includes("tts"))
+            .sort((a, b) => b.localeCompare(a));
+
+          modelSelect.innerHTML = "";
+          models.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m; opt.textContent = m;
+            modelSelect.appendChild(opt);
+          });
+
+          const target = models.find(m => m.includes("llama-3.3-70b")) || models[0];
+          if (target) modelSelect.value = target;
         }
-        if (target) modelSelect.value = target;
 
         statusDot.classList.add("active");
         statusText.innerText = `Connected: ${modelSelect.value}`;
@@ -1122,7 +1181,6 @@
       }
     }
 
-    // --- Multimodal AI Dispatch ---
     async function sendMessage() {
       const promptInput = document.getElementById("prompt-input");
       const prompt = promptInput.value.trim();
@@ -1172,21 +1230,40 @@ Return ONLY the updated code for the active file ("${activeFileName}") enclosed 
           if (data.error) throw new Error(data.error.message);
           reply = data.candidates[0].content.parts[0].text;
 
-        } else if (provider === "openai") {
+        } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+          const endpoint = 
+            provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" :
+            provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" :
+            "https://api.openai.com/v1/chat/completions";
+
+          const headers = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${key}`
+          };
+
+          if (provider === "openrouter") {
+            headers["HTTP-Referer"] = window.location.origin;
+            headers["X-Title"] = "Omni-Model Studio";
+          }
+
           const content = [{ type: "text", text: prompt }];
           if (attachedImage) {
-            content.push({ type: "image_url", image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` } });
+            content.push({ 
+              type: "image_url", 
+              image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` } 
+            });
           }
-          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+
+          const res = await fetch(endpoint, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${key}` },
+            headers: headers,
             body: JSON.stringify({
               model: model,
               messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
             })
           });
           const data = await res.json();
-          if (data.error) throw new Error(data.error.message);
+          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
           reply = data.choices[0].message.content;
 
         } else if (provider === "claude") {
