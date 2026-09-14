@@ -1540,7 +1540,6 @@
       if (keyInput.value) fetchModels(preferredModel);
     }
 
-    // Safe tab-switching that avoids disrupting active generation or killing the iframe
     function switchTab(name) {
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
         b.classList.toggle("active", ['chat', 'code', 'preview'][idx] === name);
@@ -1592,16 +1591,30 @@
           const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
+          
           data.models.forEach(m => {
-            if (m.supportedGenerationMethods?.includes("generateContent")) models.push(m.name.replace("models/", ""));
+            if (m.supportedGenerationMethods?.includes("generateContent")) {
+              models.push(m.name.replace("models/", ""));
+            }
           });
+
+          // Sort pro models by version descending so highest Pro is first
+          const proModels = models.filter(m => m.includes("pro")).sort((a, b) => {
+            const vA = (a.match(/(\d+(\.\d+)?)/) || [0, 0])[1];
+            const vB = (b.match(/(\d+(\.\d+)?)/) || [0, 0])[1];
+            return parseFloat(vB) - parseFloat(vA);
+          });
+
           modelSelect.innerHTML = "";
           models.forEach(m => {
             const opt = document.createElement("option");
-            opt.value = m; opt.textContent = m;
+            opt.value = m;
+            opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = preferredModel || models.find(m => m.includes("2.5-flash")) || models.find(m => m.includes("2.0-flash")) || models.find(m => m.includes("1.5-flash")) || models[0];
+
+          // Always default to latest Gemini Pro model
+          const target = preferredModel || proModels[0] || models.find(m => m.includes("pro")) || models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
@@ -1833,7 +1846,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
-      // Raised to 90 seconds to prevent premature timeouts on heavy multi-step prompts
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => timeoutController.abort(), 90000);
 
@@ -1856,16 +1868,14 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               });
               const data = await res.json();
 
-              // Handle 503 high demand / service overloaded
               const isOverloaded = res.status === 503 || (data.error && (data.error.code === 503 || data.error.message?.includes("high demand")));
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  // Auto-fallback from 2.5-flash to 2.0-flash or 1.5-flash if available
                   const modelOptions = Array.from(document.getElementById("model-select").options).map(o => o.value);
-                  const fallbackModel = modelOptions.find(m => m.includes("2.0-flash") || m.includes("1.5-flash"));
-                  if (fallbackModel && fallbackModel !== model) {
-                    loadingMsg.innerText = `⚠️ ${model} overloaded. Auto-falling back to ${fallbackModel}...`;
+                  const fallbackModel = modelOptions.find(m => m.includes("pro") && m !== model) || modelOptions.find(m => m.includes("flash"));
+                  if (fallbackModel) {
+                    loadingMsg.innerText = `⚠️ ${model} busy. Auto-fallback to ${fallbackModel}...`;
                     model = fallbackModel;
                     document.getElementById("model-select").value = fallbackModel;
                   } else {
