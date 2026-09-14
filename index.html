@@ -883,7 +883,9 @@
 
         if (lastRecognizedText.length > 0) {
           voiceDispatchTimer = setTimeout(() => {
-            if (speechRecognizer) speechRecognizer.stop();
+            if (speechRecognizer) {
+              speechRecognizer.stop();
+            }
           }, 1100);
         }
       };
@@ -1598,12 +1600,10 @@
             }
           });
 
-          // Sort pro models by version descending so highest Pro is first
-          const proModels = models.filter(m => m.includes("pro")).sort((a, b) => {
-            const vA = (a.match(/(\d+(\.\d+)?)/) || [0, 0])[1];
-            const vB = (b.match(/(\d+(\.\d+)?)/) || [0, 0])[1];
-            return parseFloat(vB) - parseFloat(vA);
-          });
+          // Ensure official alias gemini-pro-latest is always included
+          if (!models.includes("gemini-pro-latest")) {
+            models.unshift("gemini-pro-latest");
+          }
 
           modelSelect.innerHTML = "";
           models.forEach(m => {
@@ -1613,8 +1613,8 @@
             modelSelect.appendChild(opt);
           });
 
-          // Always default to latest Gemini Pro model
-          const target = preferredModel || proModels[0] || models.find(m => m.includes("pro")) || models[0];
+          // Strictly default to gemini-pro-latest
+          const target = preferredModel || models.find(m => m === "gemini-pro-latest") || models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
