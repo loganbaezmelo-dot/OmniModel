@@ -665,6 +665,7 @@
     let voiceDispatchTimer = null;
     let lastRecognizedText = "";
     let consoleLogCount = 0;
+    let isGenerating = false;
 
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
@@ -1245,7 +1246,6 @@
       onProviderChange(current.selectedModel);
     }
 
-    // Universal Artifact Canvas Engine (Adapts to Active Mode)
     function renderSandboxPreview() {
       document.getElementById("error-banner").style.display = "none";
       const current = getActiveSession();
@@ -1313,7 +1313,6 @@
         iframe.srcdoc = html + injectedHooks;
 
       } else if (activeMode === "writing") {
-        // Render rich readable document canvas using Marked.js via CDN
         const rawMarkdown = current.files[activeFileName] || current.files["document.md"] || "";
         iframe.srcdoc = `
           <!DOCTYPE html>
@@ -1340,7 +1339,6 @@
         `;
 
       } else if (activeMode === "data") {
-        // Interactive Data Grid + Auto Chart Canvas
         const csvData = current.files["data.csv"] || "";
         const customScript = current.files["chart.js"] || "";
         iframe.srcdoc = `
@@ -1408,7 +1406,6 @@
         `;
 
       } else {
-        // General Agent Canvas
         const rawContent = current.files[activeFileName] || "";
         iframe.srcdoc = `
           <!DOCTYPE html>
@@ -1543,6 +1540,7 @@
       if (keyInput.value) fetchModels(preferredModel);
     }
 
+    // Safe tab-switching that avoids disrupting active generation or killing the iframe
     function switchTab(name) {
       document.querySelectorAll(".tab-btn").forEach((b, idx) => {
         b.classList.toggle("active", ['chat', 'code', 'preview'][idx] === name);
@@ -1552,6 +1550,10 @@
 
       if (name === "preview") {
         document.body.classList.add("immersive-preview");
+        const frame = document.getElementById("preview-frame");
+        if (!frame.srcdoc && !isGenerating) {
+          renderSandboxPreview();
+        }
       } else {
         document.body.classList.remove("immersive-preview");
         toggleInspector(false);
@@ -1599,7 +1601,7 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = preferredModel || models.find(m => m.includes("pro-latest")) || models.find(m => m.includes("pro")) || models[0];
+          const target = preferredModel || models.find(m => m.includes("2.5-flash")) || models.find(m => m.includes("2.0-flash")) || models.find(m => m.includes("1.5-flash")) || models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
@@ -1728,7 +1730,6 @@
       }
     }
 
-    // Generate Dynamic Mode-Aware System Prompts
     function getModeSystemPrompt(customRules, currentFilesContext) {
       if (activeMode === "writing") {
         return `You are an Expert Writer and Document Editor.
@@ -1772,7 +1773,6 @@ You can answer directly in conversational text, formulate plans, or write artifa
 \`\`\``;
       }
 
-      // Default: Web Dev Autonomous Agent
       return `You are an Autonomous Software Agent capable of planning, creating files, and calling tools.
 Project Rules: ${customRules}
 Currently Active File: "${activeFileName}"
@@ -1804,7 +1804,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const prompt = promptInput.value.trim();
       const key = document.getElementById("api-key-input").value.trim();
       const provider = document.getElementById("provider-select").value;
-      const model = document.getElementById("model-select").value;
+      let model = document.getElementById("model-select").value;
       const current = getActiveSession();
       const customRules = localStorage.getItem("omni_cursorrules") || "";
       const statusText = document.getElementById("status-text");
@@ -1820,6 +1820,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       if (!key || !model) return alert("Please connect an API key first.");
       if (!current) return;
 
+      isGenerating = true;
       const userMessageObj = { role: "user", text: prompt, img: attachedImage?.dataUrl || null };
       current.messages.push(userMessageObj);
       appendChat("user", prompt, attachedImage?.dataUrl);
@@ -1832,91 +1833,128 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
+      // Raised to 90 seconds to prevent premature timeouts on heavy multi-step prompts
       const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => timeoutController.abort(), 40000);
+      const timeoutId = setTimeout(() => timeoutController.abort(), 90000);
 
       try {
         let reply = "";
+        let retries = 2;
 
-        if (provider === "gemini") {
-          const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
-          if (attachedImage) {
-            parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
+        while (retries >= 0) {
+          try {
+            if (provider === "gemini") {
+              const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
+              if (attachedImage) {
+                parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
+              }
+              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+                signal: timeoutController.signal
+              });
+              const data = await res.json();
+
+              // Handle 503 high demand / service overloaded
+              const isOverloaded = res.status === 503 || (data.error && (data.error.code === 503 || data.error.message?.includes("high demand")));
+              if (isOverloaded) {
+                if (retries > 0) {
+                  retries--;
+                  // Auto-fallback from 2.5-flash to 2.0-flash or 1.5-flash if available
+                  const modelOptions = Array.from(document.getElementById("model-select").options).map(o => o.value);
+                  const fallbackModel = modelOptions.find(m => m.includes("2.0-flash") || m.includes("1.5-flash"));
+                  if (fallbackModel && fallbackModel !== model) {
+                    loadingMsg.innerText = `⚠️ ${model} overloaded. Auto-falling back to ${fallbackModel}...`;
+                    model = fallbackModel;
+                    document.getElementById("model-select").value = fallbackModel;
+                  } else {
+                    loadingMsg.innerText = `⚠️ Google servers busy (503). Retrying in 2.5s... (${retries} left)`;
+                    await new Promise(r => setTimeout(r, 2500));
+                  }
+                  continue;
+                }
+              }
+
+              if (data.error) throw new Error(data.error.message);
+              reply = data.candidates[0].content.parts[0].text;
+              break;
+
+            } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+              const endpoint = 
+                provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" :
+                provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" :
+                "https://api.openai.com/v1/chat/completions";
+
+              const headers = {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${key}`
+              };
+
+              if (provider === "openrouter") {
+                headers["HTTP-Referer"] = window.location.origin;
+                headers["X-Title"] = "Omni-Model Studio";
+              }
+
+              const content = [{ type: "text", text: prompt }];
+              if (attachedImage) {
+                content.push({ 
+                  type: "image_url", 
+                  image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` } 
+                });
+              }
+
+              const res = await fetch(endpoint, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                  model: model,
+                  messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
+                }),
+                signal: timeoutController.signal
+              });
+              const data = await res.json();
+              if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+              reply = data.choices[0].message.content;
+              break;
+
+            } else if (provider === "claude") {
+              const content = [{ type: "text", text: prompt }];
+              if (attachedImage) {
+                content.push({
+                  type: "image",
+                  source: { type: "base64", media_type: attachedImage.mimeType, data: attachedImage.base64 }
+                });
+              }
+              const res = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": key,
+                  "anthropic-version": "2023-06-01",
+                  "anthropic-dangerous-direct-browser-access": "true"
+                },
+                body: JSON.stringify({
+                  model: model,
+                  system: systemPrompt,
+                  max_tokens: 4096,
+                  messages: [{ role: "user", content }]
+                }),
+                signal: timeoutController.signal
+              });
+              const data = await res.json();
+              if (data.error) throw new Error(data.error.message);
+              reply = data.content[0].text;
+              break;
+            }
+          } catch (innerErr) {
+            if (retries > 0 && innerErr.name !== "AbortError") {
+              retries--;
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+            throw innerErr;
           }
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contents: [{ role: "user", parts }] }),
-            signal: timeoutController.signal
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message);
-          reply = data.candidates[0].content.parts[0].text;
-
-        } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
-          const endpoint = 
-            provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" :
-            provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" :
-            "https://api.openai.com/v1/chat/completions";
-
-          const headers = {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${key}`
-          };
-
-          if (provider === "openrouter") {
-            headers["HTTP-Referer"] = window.location.origin;
-            headers["X-Title"] = "Omni-Model Studio";
-          }
-
-          const content = [{ type: "text", text: prompt }];
-          if (attachedImage) {
-            content.push({ 
-              type: "image_url", 
-              image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.base64}` } 
-            });
-          }
-
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify({
-              model: model,
-              messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
-            }),
-            signal: timeoutController.signal
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-          reply = data.choices[0].message.content;
-
-        } else if (provider === "claude") {
-          const content = [{ type: "text", text: prompt }];
-          if (attachedImage) {
-            content.push({
-              type: "image",
-              source: { type: "base64", media_type: attachedImage.mimeType, data: attachedImage.base64 }
-            });
-          }
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": key,
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true"
-            },
-            body: JSON.stringify({
-              model: model,
-              system: systemPrompt,
-              max_tokens: 4096,
-              messages: [{ role: "user", content }]
-            }),
-            signal: timeoutController.signal
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message);
-          reply = data.content[0].text;
         }
 
         clearTimeout(timeoutId);
@@ -1924,7 +1962,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        // Planning
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
         if (planMatch && planMatch[1]) {
           try {
@@ -1932,7 +1969,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Tool Calls
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
         for (const tc of toolCalls) {
           try {
@@ -1947,7 +1983,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(err) {}
         }
 
-        // File/Artifact parsing
         const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
         let matched;
         let codeUpdated = false;
@@ -1977,15 +2012,27 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         }
 
         saveSessions();
+        statusDot.className = "status-dot active";
+        statusText.innerText = `Connected: ${model}`;
 
       } catch (err) {
         clearTimeout(timeoutId);
-        statusDot.className = "status-dot offline";
         let errorMsg = err.message;
-        if (err.name === "AbortError") errorMsg = "Request timed out!";
-        else if (!navigator.onLine) errorMsg = "Network connection dropped!";
-        statusText.innerText = "❌ Connection Dropped";
+        if (err.name === "AbortError") {
+          statusDot.className = "status-dot offline";
+          statusText.innerText = "❌ Request Timed Out (90s)";
+          errorMsg = "Request timed out after 90 seconds. The model may be running too slow or experiencing peak traffic.";
+        } else if (!navigator.onLine) {
+          statusDot.className = "status-dot offline";
+          statusText.innerText = "❌ Network Dropped";
+          errorMsg = "Network connection dropped mid-request!";
+        } else {
+          statusDot.className = "status-dot active";
+          statusText.innerText = "⚠️ API Error";
+        }
         loadingMsg.innerText = "⚠️ Failed: " + errorMsg;
+      } finally {
+        isGenerating = false;
       }
     }
 
@@ -2006,7 +2053,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
     loadRules();
     loadGhConfig();
 
-    // Initialize Sessions for Active Mode
     const modeSessions = sessions.filter(s => (s.mode || "webdev") === activeMode);
     if (!modeSessions.length) {
       createNewSession();
