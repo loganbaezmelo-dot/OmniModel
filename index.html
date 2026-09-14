@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Omni-Model Web Studio</title>
+  <title>Omni-Model Multi-Studio</title>
   <style>
     :root {
       --bg: #0f1117;
@@ -57,6 +57,7 @@
     .export-btn { background: #10b981; }
     .github-btn { background: #238636; }
     .libs-btn { background: #8b5cf6; }
+    .mode-btn { background: #312e81; border: 1px solid #4f46e5; color: #c7d2fe; font-weight: 700; }
     
     .status-row {
       display: flex;
@@ -108,7 +109,6 @@
       align-items: center;
     }
 
-    /* Agent Plan Tracker Card */
     #agent-plan-banner {
       display: none;
       background: #131722;
@@ -413,12 +413,12 @@
   <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <aside id="sidebar">
     <div class="sidebar-header">
-      <strong>Saved Sessions</strong>
+      <strong id="sidebar-mode-title">Saved Sessions</strong>
       <button onclick="createNewSession()">+ New</button>
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
 
-    <div class="sidebar-section">
+    <div class="sidebar-section" id="sidebar-gh-section">
       <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
         <input type="password" id="gh-token" placeholder="GitHub PAT (repo scope)" oninput="saveGhConfig()">
@@ -487,6 +487,15 @@
   <header>
     <div class="top-bar">
       <button class="icon-btn" onclick="toggleSidebar()">☰</button>
+      
+      <!-- Mode Swapper -->
+      <select id="mode-select" class="mode-btn" onchange="onModeChange()">
+        <option value="webdev">💻 Web Dev</option>
+        <option value="writing">✍️ Writing / Document</option>
+        <option value="data">📊 Data & Charts</option>
+        <option value="general">🧠 General Agent</option>
+      </select>
+
       <select id="provider-select" onchange="onUserChangeProvider()">
         <option value="gemini">Gemini</option>
         <option value="openai">OpenAI</option>
@@ -499,8 +508,8 @@
       <select id="model-select" style="max-width: 170px;" onchange="onUserChangeModel()">
         <option value="">(No models)</option>
       </select>
-      <button class="libs-btn" onclick="toggleLibsModal(true)">+ Libs</button>
-      <button class="export-btn" onclick="exportProject()">Export ⤓</button>
+      <button id="libs-header-btn" class="libs-btn" onclick="toggleLibsModal(true)">+ Libs</button>
+      <button id="export-btn" class="export-btn" onclick="exportProject()">Export ⤓</button>
     </div>
     <div class="status-row">
       <div class="status">
@@ -512,23 +521,22 @@
   </header>
 
   <nav class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('chat')">AI Chat</button>
-    <button class="tab-btn" onclick="switchTab('code')">Code & Files</button>
-    <button class="tab-btn" onclick="switchTab('preview')">Live Preview</button>
+    <button class="tab-btn active" id="tab-nav-chat" onclick="switchTab('chat')">AI Chat</button>
+    <button class="tab-btn" id="tab-nav-code" onclick="switchTab('code')">Code & Files</button>
+    <button class="tab-btn" id="tab-nav-preview" onclick="switchTab('preview')">Live Preview</button>
   </nav>
 
   <main>
     <!-- View: Chat -->
     <div id="view-chat" class="view-panel active">
       <div class="panel-header">
-        <span>Autonomous Agent</span>
+        <span id="chat-header-title">Autonomous Agent</span>
         <div style="display:flex; gap:6px;">
           <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="undoSnapshot()">↩ Undo</button>
           <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="redoSnapshot()">↪ Redo</button>
         </div>
       </div>
 
-      <!-- Autonomous Step Planner Banner -->
       <div id="agent-plan-banner">
         <span class="plan-title">⚡ Agent Plan Active</span>
         <div class="plan-step-list" id="agent-plan-steps"></div>
@@ -544,30 +552,30 @@
 
       <div class="input-row">
         <input type="file" id="file-uploader" accept="image/*" style="display:none;" onchange="handleImageUpload(event)">
-        <button class="media-btn" title="Attach wireframe or UI screenshot" onclick="document.getElementById('file-uploader').click()">📎</button>
+        <button class="media-btn" title="Attach image" onclick="document.getElementById('file-uploader').click()">📎</button>
         <button id="voice-btn" class="media-btn auto-send-active" title="Voice Auto-Send: Active ⚡" onclick="toggleVoiceInput()">🎙️</button>
-        <textarea id="prompt-input" placeholder="Prompt AI to plan, create files, or inject CDNs..."></textarea>
+        <textarea id="prompt-input" placeholder="Prompt AI..."></textarea>
         <button id="send-btn" onclick="sendMessage()">Send</button>
       </div>
     </div>
 
-    <!-- View: Multi-File Code Editor -->
+    <!-- View: Code/Document Workspace -->
     <div id="view-code" class="view-panel">
       <div class="panel-header">
-        <span>Files & Code</span>
-        <button class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="promptNewFile()">+ File</button>
+        <span id="files-header-title">Files & Code</span>
+        <button id="add-file-btn" class="icon-btn" style="padding:2px 8px; font-size:11px;" onclick="promptNewFile()">+ File</button>
       </div>
       <div id="file-tree-bar" class="file-tree-bar"></div>
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
-    <!-- View: Live Preview Canvas -->
+    <!-- View: Universal Artifact Canvas -->
     <div id="view-preview" class="view-panel">
       <div class="preview-floating-bar">
         <button class="primary" onclick="switchTab('chat')">← Chat</button>
-        <button onclick="switchTab('code')">Files</button>
+        <button id="preview-files-btn" onclick="switchTab('code')">Files</button>
         <button id="inspect-toggle-btn" onclick="toggleInspector()">🔍 Inspect</button>
-        <button onclick="toggleConsoleModal()"><span id="console-badge">⚡ Logs</span></button>
+        <button id="console-toggle-btn" onclick="toggleConsoleModal()"><span id="console-badge">⚡ Logs</span></button>
       </div>
 
       <div class="floating-banner-container">
@@ -594,10 +602,38 @@
   </main>
 
   <script>
-    const DEFAULT_PROJECT = {
-      "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Autonomous Agent Ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
-      "styles.css": "body {\n  font-family: sans-serif;\n  display: grid;\n  place-content: center;\n  height: 90vh;\n  background: #fafafa;\n  color: #222;\n  text-align: center;\n}",
-      "script.js": "console.log('Omni app loaded.');"
+    const DEFAULT_TEMPLATES = {
+      webdev: {
+        title: "Web Project",
+        defaultFile: "index.html",
+        files: {
+          "index.html": "<!DOCTYPE html>\n<html>\n<head>\n  <link rel=\"stylesheet\" href=\"styles.css\">\n</head>\n<body>\n  <h2>Omni Studio 🚀</h2>\n  <p>Autonomous Web Dev Ready!</p>\n  <script src=\"script.js\"><\/script>\n</body>\n</html>",
+          "styles.css": "body {\n  font-family: sans-serif;\n  display: grid;\n  place-content: center;\n  height: 90vh;\n  background: #fafafa;\n  color: #222;\n  text-align: center;\n}",
+          "script.js": "console.log('Omni web loaded.');"
+        }
+      },
+      writing: {
+        title: "Draft Document",
+        defaultFile: "document.md",
+        files: {
+          "document.md": "# Untitled Document\n\nStart writing or prompt the AI to generate an outline, essay, or draft."
+        }
+      },
+      data: {
+        title: "Data Sheet",
+        defaultFile: "data.csv",
+        files: {
+          "data.csv": "Month,Revenue,Expenses\nJan,12000,8500\nFeb,15000,9200\nMar,18500,10400\nApr,22000,11300\nMay,26000,12100",
+          "chart.js": "// Autonomous Chart renderer initialized"
+        }
+      },
+      general: {
+        title: "General Agent",
+        defaultFile: "notes.txt",
+        files: {
+          "notes.txt": "OmniModel General Workspace.\nFree-form thinking, multi-step queries, and research artifacts."
+        }
+      }
     };
 
     const CDN_TAGS = {
@@ -617,7 +653,8 @@
     };
 
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
-    let activeSessionId = localStorage.getItem("omni_active_session_id") || null;
+    let activeMode = localStorage.getItem("omni_active_mode") || "webdev";
+    let activeSessionId = localStorage.getItem(`omni_active_session_${activeMode}`) || null;
     let activeFileName = "index.html";
     let isInspectorActive = false;
     let lastCapturedError = null;
@@ -648,11 +685,50 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
+    function onModeChange() {
+      activeMode = document.getElementById("mode-select").value;
+      localStorage.setItem("omni_active_mode", activeMode);
+      
+      activeSessionId = localStorage.getItem(`omni_active_session_${activeMode}`) || null;
+      const modeSessions = sessions.filter(s => (s.mode || "webdev") === activeMode);
+
+      if (!modeSessions.length || !modeSessions.find(s => s.id === activeSessionId)) {
+        createNewSession();
+      } else {
+        loadSessionUI();
+        renderSidebar();
+      }
+    }
+
+    function applyModeUIChrome() {
+      const isWebDev = activeMode === "webdev";
+      const isWriting = activeMode === "writing";
+      const isData = activeMode === "data";
+
+      document.getElementById("mode-select").value = activeMode;
+      document.getElementById("sidebar-mode-title").innerText = `${activeMode.toUpperCase()} Sessions`;
+
+      document.getElementById("tab-nav-code").innerText = isWriting ? "Document" : (isData ? "Data & Scripts" : "Code & Files");
+      document.getElementById("tab-nav-preview").innerText = isWriting ? "Reading Canvas" : (isData ? "Chart Canvas" : "Live Preview");
+      document.getElementById("files-header-title").innerText = isWriting ? "Document Editor" : "Files & Workspace";
+      document.getElementById("chat-header-title").innerText = `${activeMode.toUpperCase()} Agent`;
+
+      document.getElementById("libs-header-btn").style.display = isWebDev ? "inline-block" : "none";
+      document.getElementById("sidebar-gh-section").style.display = isWebDev ? "flex" : "none";
+      document.getElementById("inspect-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
+      document.getElementById("console-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
+
+      const promptInput = document.getElementById("prompt-input");
+      if (isWriting) promptInput.placeholder = "Prompt to write essays, refine paragraphs, summarize...";
+      else if (isData) promptInput.placeholder = "Paste data, ask for chart trends, CSV summaries...";
+      else if (isWebDev) promptInput.placeholder = "Prompt AI to code, inspect, inject CDNs, or fix...";
+      else promptInput.placeholder = "Prompt General Agent with anything...";
+    }
+
     function toggleLibsModal(open) {
       document.getElementById("libs-modal-overlay").classList.toggle("open", open);
     }
 
-    // Autonomous Tool: Injects CDN library directly into index.html
     function injectCdn(key, silent = false) {
       const tag = CDN_TAGS[key.toLowerCase()];
       const current = getActiveSession();
@@ -681,7 +757,6 @@
       return true;
     }
 
-    // Autonomous Tool: Creates new file with initial content
     function agentCreateFile(filename, content = "") {
       const current = getActiveSession();
       if (!current || !filename) return false;
@@ -866,13 +941,16 @@
       treeBar.innerHTML = "";
       if (!current || !current.files) return;
 
-      Object.keys(current.files).forEach(filename => {
+      const fileNames = Object.keys(current.files);
+      const isSingular = fileNames.length <= 1;
+
+      fileNames.forEach(filename => {
         const pill = document.createElement("div");
         pill.className = `file-pill ${filename === activeFileName ? "active" : ""}`;
         pill.innerHTML = `<span>${filename}</span>`;
         pill.onclick = () => switchFile(filename);
 
-        if (filename !== "index.html") {
+        if (!isSingular && filename !== "index.html" && filename !== "document.md") {
           const del = document.createElement("span");
           del.className = "file-pill-del";
           del.innerText = "×";
@@ -892,10 +970,11 @@
       saveGhConfig();
       renderFileTree();
       loadFileEditor();
+      if (activeMode !== "webdev") renderSandboxPreview();
     }
 
     function promptNewFile() {
-      const name = window.prompt("New File Name (e.g. app.js, styles.css):");
+      const name = window.prompt("New File Name:");
       if (!name) return;
       agentCreateFile(name, "");
     }
@@ -905,14 +984,17 @@
       if (confirm(`Delete ${name}?`)) {
         delete current.files[name];
         captureSnapshot();
-        switchFile("index.html");
+        const fallback = Object.keys(current.files)[0] || "index.html";
+        switchFile(fallback);
       }
     }
 
     function loadFileEditor() {
       const current = getActiveSession();
       if (!current || !current.files) return;
-      if (!current.files[activeFileName]) activeFileName = "index.html";
+      if (!current.files[activeFileName]) {
+        activeFileName = Object.keys(current.files)[0] || DEFAULT_TEMPLATES[activeMode].defaultFile;
+      }
       document.getElementById("code-editor").value = current.files[activeFileName] || "";
     }
 
@@ -1034,10 +1116,10 @@
     }
     function saveSessions() {
       localStorage.setItem("omni_sessions", JSON.stringify(sessions));
-      localStorage.setItem("omni_active_session_id", activeSessionId);
+      localStorage.setItem(`omni_active_session_${activeMode}`, activeSessionId);
     }
     function getActiveSession() {
-      return sessions.find(s => s.id === activeSessionId);
+      return sessions.find(s => s.id === activeSessionId && (s.mode || "webdev") === activeMode);
     }
     function toggleSidebar() {
       document.getElementById("sidebar").classList.toggle("open");
@@ -1047,14 +1129,17 @@
     function renderSidebar() {
       const list = document.getElementById("sidebar-list");
       list.innerHTML = "";
-      sessions.forEach(sess => {
+      
+      const filtered = sessions.filter(s => (s.mode || "webdev") === activeMode);
+
+      filtered.forEach(sess => {
         const item = document.createElement("div");
         item.className = `chat-item ${sess.id === activeSessionId ? "active" : ""}`;
         item.onclick = () => switchSession(sess.id);
 
         const title = document.createElement("span");
         title.className = "chat-item-title";
-        title.innerText = sess.title || "Untitled Project";
+        title.innerText = sess.title || "Untitled Session";
 
         const del = document.createElement("button");
         del.className = "chat-del-btn";
@@ -1068,11 +1153,13 @@
     }
 
     function createNewSession() {
+      const template = DEFAULT_TEMPLATES[activeMode];
       const newSession = {
-        id: "sess_" + Date.now(),
-        title: "New Project",
-        files: JSON.parse(JSON.stringify(DEFAULT_PROJECT)),
-        history: [JSON.parse(JSON.stringify(DEFAULT_PROJECT))],
+        id: `sess_${activeMode}_` + Date.now(),
+        mode: activeMode,
+        title: `${template.title} #${sessions.filter(s => (s.mode || "webdev") === activeMode).length + 1}`,
+        files: JSON.parse(JSON.stringify(template.files)),
+        history: [JSON.parse(JSON.stringify(template.files))],
         historyIdx: 0,
         messages: [],
         selectedProvider: "gemini",
@@ -1080,7 +1167,7 @@
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
-      activeFileName = "index.html";
+      activeFileName = template.defaultFile;
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -1089,7 +1176,8 @@
 
     function switchSession(id) {
       activeSessionId = id;
-      activeFileName = "index.html";
+      const current = getActiveSession();
+      activeFileName = current ? Object.keys(current.files)[0] : DEFAULT_TEMPLATES[activeMode].defaultFile;
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -1098,8 +1186,9 @@
 
     function deleteSession(id) {
       sessions = sessions.filter(s => s.id !== id);
-      activeSessionId = sessions.length ? sessions[0].id : null;
-      if (!sessions.length) { createNewSession(); return; }
+      const remainingInMode = sessions.filter(s => (s.mode || "webdev") === activeMode);
+      activeSessionId = remainingInMode.length ? remainingInMode[0].id : null;
+      if (!remainingInMode.length) { createNewSession(); return; }
       saveSessions();
       loadSessionUI();
       renderSidebar();
@@ -1124,18 +1213,15 @@
     }
 
     function loadSessionUI() {
+      applyModeUIChrome();
       const current = getActiveSession();
-      if (!current) return;
-      if (!current.files) current.files = { "index.html": current.code || DEFAULT_PROJECT["index.html"] };
-      if (!current.history) {
-        current.history = [JSON.parse(JSON.stringify(current.files))];
-        current.historyIdx = 0;
+      if (!current) {
+        createNewSession();
+        return;
       }
 
       if (current.selectedProvider) {
         document.getElementById("provider-select").value = current.selectedProvider;
-      } else {
-        document.getElementById("provider-select").value = "gemini";
       }
 
       const historyDiv = document.getElementById("chat-history");
@@ -1159,75 +1245,190 @@
       onProviderChange(current.selectedModel);
     }
 
+    // Universal Artifact Canvas Engine (Adapts to Active Mode)
     function renderSandboxPreview() {
       document.getElementById("error-banner").style.display = "none";
       const current = getActiveSession();
       if (!current || !current.files) return;
 
-      let html = current.files["index.html"] || "";
+      const iframe = document.getElementById("preview-frame");
 
-      Object.keys(current.files).forEach(fn => {
-        if (fn.endsWith(".css")) {
-          const cssRegex = new RegExp(`<link[^>]+href=["']${fn}["'][^>]*>`, "gi");
-          html = html.replace(cssRegex, `<style>/* ${fn} */\n${current.files[fn]}\n</style>`);
-        }
-        if (fn.endsWith(".js") && fn !== "index.html") {
-          const jsRegex = new RegExp(`<script[^>]+src=["']${fn}["'][^>]*><\\/script>`, "gi");
-          html = html.replace(jsRegex, `<script>/* ${fn} */\n${current.files[fn]}\n<\/script>`);
-        }
-      });
+      if (activeMode === "webdev") {
+        let html = current.files["index.html"] || "";
 
-      const injectedHooks = `
-        <script>
-          (function() {
-            const _log = console.log;
-            const _warn = console.warn;
-            const _error = console.error;
-            function send(type, args) {
-              try {
-                const str = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-                window.parent.postMessage({ type: 'OMNI_CONSOLE_OUTPUT', level: type, text: str }, '*');
-              } catch(e) {}
-            }
-            console.log = function() { send('log', arguments); _log.apply(console, arguments); };
-            console.warn = function() { send('warn', arguments); _warn.apply(console, arguments); };
-            console.error = function() { send('error', arguments); _error.apply(console, arguments); };
-          })();
+        Object.keys(current.files).forEach(fn => {
+          if (fn.endsWith(".css")) {
+            const cssRegex = new RegExp(`<link[^>]+href=["']${fn}["'][^>]*>`, "gi");
+            html = html.replace(cssRegex, `<style>/* ${fn} */\n${current.files[fn]}\n</style>`);
+          }
+          if (fn.endsWith(".js") && fn !== "index.html") {
+            const jsRegex = new RegExp(`<script[^>]+src=["']${fn}["'][^>]*><\\/script>`, "gi");
+            html = html.replace(jsRegex, `<script>/* ${fn} */\n${current.files[fn]}\n<\/script>`);
+          }
+        });
 
-          window.onerror = function(msg, url, line) {
-            window.parent.postMessage({ type: 'OMNI_RUNTIME_ERROR', error: msg + ' (Line ' + line + ')' }, '*');
-            return false;
-          };
-          window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'OMNI_SET_INSPECT_MODE') window.__inspectActive = e.data.active;
-          });
-          let prevEl = null;
-          document.addEventListener('mouseover', function(e) {
-            if (!window.__inspectActive) return;
-            if (prevEl) prevEl.style.outline = '';
-            prevEl = e.target;
-            prevEl.style.outline = '2px dashed #6366f1';
-          }, true);
-          document.addEventListener('click', function(e) {
-            if (!window.__inspectActive) return;
-            e.preventDefault(); e.stopPropagation();
-            if (prevEl) prevEl.style.outline = '';
-            const tag = e.target.tagName.toLowerCase();
-            const id = e.target.id ? '#' + e.target.id : '';
-            const cls = e.target.className ? '.' + String(e.target.className).trim().replace(/\\s+/g, '.') : '';
-            window.parent.postMessage({ 
-              type: 'OMNI_ELEMENT_INSPECTED', 
-              selector: tag + id + cls,
-              outerHTML: e.target.outerHTML.slice(0, 180)
-            }, '*');
-          }, true);
-        <\/script>
-      `;
+        const injectedHooks = `
+          <script>
+            (function() {
+              const _log = console.log, _warn = console.warn, _error = console.error;
+              function send(type, args) {
+                try {
+                  const str = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+                  window.parent.postMessage({ type: 'OMNI_CONSOLE_OUTPUT', level: type, text: str }, '*');
+                } catch(e) {}
+              }
+              console.log = function() { send('log', arguments); _log.apply(console, arguments); };
+              console.warn = function() { send('warn', arguments); _warn.apply(console, arguments); };
+              console.error = function() { send('error', arguments); _error.apply(console, arguments); };
+            })();
+            window.onerror = function(msg, url, line) {
+              window.parent.postMessage({ type: 'OMNI_RUNTIME_ERROR', error: msg + ' (Line ' + line + ')' }, '*');
+              return false;
+            };
+            window.addEventListener('message', function(e) {
+              if (e.data && e.data.type === 'OMNI_SET_INSPECT_MODE') window.__inspectActive = e.data.active;
+            });
+            let prevEl = null;
+            document.addEventListener('mouseover', function(e) {
+              if (!window.__inspectActive) return;
+              if (prevEl) prevEl.style.outline = '';
+              prevEl = e.target;
+              prevEl.style.outline = '2px dashed #6366f1';
+            }, true);
+            document.addEventListener('click', function(e) {
+              if (!window.__inspectActive) return;
+              e.preventDefault(); e.stopPropagation();
+              if (prevEl) prevEl.style.outline = '';
+              const tag = e.target.tagName.toLowerCase();
+              const id = e.target.id ? '#' + e.target.id : '';
+              const cls = e.target.className ? '.' + String(e.target.className).trim().replace(/\\s+/g, '.') : '';
+              window.parent.postMessage({ 
+                type: 'OMNI_ELEMENT_INSPECTED', 
+                selector: tag + id + cls,
+                outerHTML: e.target.outerHTML.slice(0, 180)
+              }, '*');
+            }, true);
+          <\/script>
+        `;
+        iframe.srcdoc = html + injectedHooks;
 
-      document.getElementById("preview-frame").srcdoc = html + injectedHooks;
+      } else if (activeMode === "writing") {
+        // Render rich readable document canvas using Marked.js via CDN
+        const rawMarkdown = current.files[activeFileName] || current.files["document.md"] || "";
+        iframe.srcdoc = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.7; padding: 24px 18px; max-width: 740px; margin: 0 auto; color: #1e293b; background: #fff; }
+              h1,h2,h3 { color: #0f172a; margin-top: 1.4em; }
+              blockquote { border-left: 4px solid #6366f1; padding-left: 14px; color: #475569; margin-left: 0; font-style: italic; }
+              code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: monospace; }
+              pre code { display: block; padding: 12px; overflow-x: auto; background: #0f172a; color: #e2e8f0; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div id="content"></div>
+            <script>
+              document.getElementById('content').innerHTML = marked.parse(${JSON.stringify(rawMarkdown)});
+            <\/script>
+          </body>
+          </html>
+        `;
+
+      } else if (activeMode === "data") {
+        // Interactive Data Grid + Auto Chart Canvas
+        const csvData = current.files["data.csv"] || "";
+        const customScript = current.files["chart.js"] || "";
+        iframe.srcdoc = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+            <style>
+              body { font-family: sans-serif; padding: 18px; background: #fafafa; color: #111; }
+              .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+              table { width: 100%; border-collapse: collapse; font-size: 13px; }
+              th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+              th { background: #f1f5f9; font-weight: 600; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h3>Data Preview</h3>
+              <div style="overflow-x: auto;" id="table-container"></div>
+            </div>
+            <div class="card">
+              <h3>Chart Visualization</h3>
+              <canvas id="autoChart" style="max-height: 320px;"></canvas>
+            </div>
+            <script>
+              const rawCsv = ${JSON.stringify(csvData)};
+              const lines = rawCsv.trim().split('\\n');
+              if (lines.length > 0) {
+                let html = '<table><thead><tr>';
+                const headers = lines[0].split(',');
+                headers.forEach(h => html += '<th>' + h.trim() + '</th>');
+                html += '</tr></thead><tbody>';
+                for (let i = 1; i < lines.length; i++) {
+                  html += '<tr>';
+                  lines[i].split(',').forEach(d => html += '<td>' + d.trim() + '</td>');
+                  html += '</tr>';
+                }
+                html += '</tbody></table>';
+                document.getElementById('table-container').innerHTML = html;
+
+                try {
+                  const labels = [];
+                  const dataPoints = [];
+                  for (let i = 1; i < lines.length; i++) {
+                    const row = lines[i].split(',');
+                    labels.push(row[0].trim());
+                    dataPoints.push(parseFloat(row[1]) || 0);
+                  }
+                  new Chart(document.getElementById('autoChart'), {
+                    type: 'bar',
+                    data: {
+                      labels: labels,
+                      datasets: [{ label: headers[1] || 'Values', data: dataPoints, backgroundColor: '#6366f1' }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                  });
+                } catch(e) {}
+              }
+              ${customScript}
+            <\/script>
+          </body>
+          </html>
+        `;
+
+      } else {
+        // General Agent Canvas
+        const rawContent = current.files[activeFileName] || "";
+        iframe.srcdoc = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>body { font-family: monospace; padding: 18px; line-height: 1.5; color: #1e293b; }</style>
+          </head>
+          <body>
+            <h3>Workspace Artifact: ${activeFileName}</h3>
+            <pre style="white-space: pre-wrap; word-break: break-word;">${rawContent.replace(/</g, "&lt;")}</pre>
+          </body>
+          </html>
+        `;
+      }
     }
 
     function triggerAutonomousVerification() {
+      if (activeMode !== "webdev") return;
       const banner = document.getElementById("diff-banner");
       banner.style.display = "none";
 
@@ -1313,11 +1514,13 @@
       const current = getActiveSession();
       if (!current || !current.files) return;
       
-      const fileName = current.files["index.html"] ? "index.html" : (activeFileName || "index.html");
+      const fileName = activeFileName || Object.keys(current.files)[0] || "document.txt";
       const fileContent = current.files[fileName] || "";
       
-      const mimeType = fileName.endsWith(".css") ? "text/css" :
-                       fileName.endsWith(".js") ? "text/javascript" : "text/html";
+      const mimeType = fileName.endsWith(".html") ? "text/html" :
+                       fileName.endsWith(".css") ? "text/css" :
+                       fileName.endsWith(".js") ? "text/javascript" :
+                       fileName.endsWith(".csv") ? "text/csv" : "text/plain";
                        
       const blob = new Blob([fileContent], { type: `${mimeType};charset=utf-8` });
       const a = document.createElement("a");
@@ -1525,6 +1728,77 @@
       }
     }
 
+    // Generate Dynamic Mode-Aware System Prompts
+    function getModeSystemPrompt(customRules, currentFilesContext) {
+      if (activeMode === "writing") {
+        return `You are an Expert Writer and Document Editor.
+Project Rules: ${customRules}
+Active Document: "${activeFileName}"
+Workspace Files:
+${currentFilesContext}
+
+Return your main document content updated in:
+\`\`\`filepath:${activeFileName}
+(your markdown text here)
+\`\`\`
+Provide clear narrative prose, essays, or drafts.`;
+      }
+
+      if (activeMode === "data") {
+        return `You are a Data Analyst and Visualization Agent.
+Project Rules: ${customRules}
+Current Files:
+${currentFilesContext}
+
+You can output data to 'data.csv' or interactive Chart.js scripts to 'chart.js'.
+Format your files like:
+\`\`\`filepath:data.csv
+Column1,Column2
+A,10
+B,20
+\`\`\``;
+      }
+
+      if (activeMode === "general") {
+        return `You are an Unconstrained Autonomous Problem Solver and Thinking Agent.
+User custom instructions: ${customRules}
+Active workspace file: "${activeFileName}"
+Files:
+${currentFilesContext}
+
+You can answer directly in conversational text, formulate plans, or write artifacts into files using:
+\`\`\`filepath:${activeFileName}
+(content)
+\`\`\``;
+      }
+
+      // Default: Web Dev Autonomous Agent
+      return `You are an Autonomous Software Agent capable of planning, creating files, and calling tools.
+Project Rules: ${customRules}
+Currently Active File: "${activeFileName}"
+All Available Files:
+${currentFilesContext}
+
+AVAILABLE TOOL ACTIONS:
+1. Multi-Step Plan:
+\`\`\`agent_plan
+["Step 1: description", "Step 2: description"]
+\`\`\`
+2. Autonomous CDN Injection:
+Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
+\`\`\`tool_call
+{"action": "inject_cdn", "library": "tailwind"}
+\`\`\`
+3. Autonomous File Creation:
+\`\`\`tool_call
+{"action": "create_file", "filename": "auth.js", "content": "// code"}
+\`\`\`
+4. Code Updates:
+\`\`\`filepath:index.html
+<!DOCTYPE html>...
+\`\`\``;
+    }
+
     async function sendMessage() {
       const promptInput = document.getElementById("prompt-input");
       const prompt = promptInput.value.trim();
@@ -1552,39 +1826,9 @@
       promptInput.value = "";
 
       const currentFilesContext = JSON.stringify(current.files, null, 2);
-      
-      // Autonomous Multi-Step Agent Instructions + Tool Calling Schema
-      const systemPrompt = `You are an Autonomous Software Agent capable of planning, creating files, and calling tools.
-Project Rules: ${customRules}
-Currently Active File: "${activeFileName}"
-All Available Files:
-${currentFilesContext}
+      const systemPrompt = getModeSystemPrompt(customRules, currentFilesContext);
 
-AVAILABLE TOOL ACTIONS:
-1. Multi-Step Plan: Break down complex goals into tasks:
-\`\`\`agent_plan
-["Step 1: description", "Step 2: description", "Step 3: description"]
-\`\`\`
-
-2. Autonomous Tool Calling (CDN Injection):
-Available CDNs: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'.
-\`\`\`tool_call
-{"action": "inject_cdn", "library": "tailwind"}
-\`\`\`
-
-3. Autonomous File Creation:
-\`\`\`tool_call
-{"action": "create_file", "filename": "auth.js", "content": "// code"}
-\`\`\`
-
-4. Code Updating:
-Return the full updated code for the target file enclosed in triple backticks with a filepath header:
-\`\`\`filepath:index.html
-<!DOCTYPE html>...
-\`\`\`
-If only updating the active file "${activeFileName}", regular code backticks (\`\`\`html or \`\`\`javascript) are accepted.`;
-
-      appendChat("assistant", "🤖 Agent thinking & planning...");
+      appendChat("assistant", `🤖 Agent working in [${activeMode.toUpperCase()}]...`);
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
@@ -1595,7 +1839,7 @@ If only updating the active file "${activeFileName}", regular code backticks (\`
         let reply = "";
 
         if (provider === "gemini") {
-          const parts = [{ text: systemPrompt + "\n\nUser Goal: " + prompt }];
+          const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
           if (attachedImage) {
             parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
           }
@@ -1680,35 +1924,30 @@ If only updating the active file "${activeFileName}", regular code backticks (\`
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        // --- 1. Autonomous Planning Execution ---
+        // Planning
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
         if (planMatch && planMatch[1]) {
           try {
-            const parsedPlan = JSON.parse(planMatch[1]);
-            renderAgentPlan(parsedPlan);
-          } catch(e) {
-            console.warn("Plan parsing skipped:", e);
-          }
+            renderAgentPlan(JSON.parse(planMatch[1]));
+          } catch(e) {}
         }
 
-        // --- 2. Autonomous Tool Calling (Function Calls) ---
+        // Tool Calls
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
             if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
-              appendChat("system-agent", `⚡ Tool Executed: Injected CDN '${tool.library}' into index.html`);
+              appendChat("system-agent", `⚡ Tool Executed: Injected CDN '${tool.library}'`);
             } else if (tool.action === "create_file" && tool.filename) {
               agentCreateFile(tool.filename, tool.content || "");
-              appendChat("system-agent", `📁 File Created: '${tool.filename}' initialized autonomously.`);
+              appendChat("system-agent", `📁 File Created: '${tool.filename}'`);
             }
-          } catch(err) {
-            console.warn("Tool Call Error:", err);
-          }
+          } catch(err) {}
         }
 
-        // --- 3. Autonomous Multi-File Code Updates ---
+        // File/Artifact parsing
         const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
         let matched;
         let codeUpdated = false;
@@ -1719,7 +1958,7 @@ If only updating the active file "${activeFileName}", regular code backticks (\`
 
           if (matched[0].includes("agent_plan") || matched[0].includes("tool_call")) continue;
 
-          if (codeBody.length > 20) {
+          if (codeBody.length > 5) {
             captureSnapshot();
             current.files[targetPath] = codeBody;
             if (targetPath === activeFileName) {
@@ -1767,10 +2006,12 @@ If only updating the active file "${activeFileName}", regular code backticks (\`
     loadRules();
     loadGhConfig();
 
-    if (!sessions.length) {
+    // Initialize Sessions for Active Mode
+    const modeSessions = sessions.filter(s => (s.mode || "webdev") === activeMode);
+    if (!modeSessions.length) {
       createNewSession();
     } else {
-      if (!activeSessionId) activeSessionId = sessions[0].id;
+      if (!activeSessionId) activeSessionId = modeSessions[0].id;
       loadSessionUI();
       renderSidebar();
     }
