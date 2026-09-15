@@ -631,7 +631,7 @@
         title: "General Agent",
         defaultFile: "notes.txt",
         files: {
-          "notes.txt": "OmniModel General Workspace.\nFree-form thinking, multi-step queries, and research artifacts."
+          "notes.txt": "OmniModel General Workspace.\nFree-form thinking, live web browsing, and multi-step tasks."
         }
       }
     };
@@ -686,6 +686,62 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
+    // --- Web Tools (Search, Fetch, HTTP) ---
+    async function agentWebSearch(query) {
+      try {
+        const encoded = encodeURIComponent(query);
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`;
+        const res = await fetch(proxyUrl);
+        const data = await res.json();
+        const doc = new DOMParser().parseFromString(data.contents, "text/html");
+        const results = [];
+        doc.querySelectorAll(".result__body").forEach((el, idx) => {
+          if (idx < 5) {
+            const title = el.querySelector(".result__title")?.innerText?.trim() || "";
+            const snippet = el.querySelector(".result__snippet")?.innerText?.trim() || "";
+            const rawLink = el.querySelector(".result__url")?.getAttribute("href") || "";
+            if (title) results.push(`• ${title} (${rawLink}): ${snippet}`);
+          }
+        });
+        return results.length ? results.join("\n") : "No direct web results found.";
+      } catch (e) {
+        return `Web search failed: ${e.message}`;
+      }
+    }
+
+    async function agentWebFetch(targetUrl) {
+      try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        const res = await fetch(proxyUrl);
+        const data = await res.json();
+        if (!data.contents) throw new Error("Empty response returned");
+
+        const doc = new DOMParser().parseFromString(data.contents, "text/html");
+        doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
+        const text = doc.body?.innerText || doc.body?.textContent || data.contents;
+        return text.replace(/\s+/g, " ").slice(0, 4500);
+      } catch (err) {
+        return `Failed to fetch URL: ${err.message}`;
+      }
+    }
+
+    async function agentHttpRequest(method, url, headers = {}, body = null) {
+      try {
+        const opts = {
+          method: method.toUpperCase(),
+          headers: { "Content-Type": "application/json", ...headers }
+        };
+        if (body && method.toUpperCase() !== "GET") {
+          opts.body = typeof body === "string" ? body : JSON.stringify(body);
+        }
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        return `Status ${res.status}: ${text.slice(0, 1000)}`;
+      } catch (err) {
+        return `HTTP Request failed: ${err.message}`;
+      }
+    }
+
     function onModeChange() {
       activeMode = document.getElementById("mode-select").value;
       localStorage.setItem("omni_active_mode", activeMode);
@@ -723,7 +779,7 @@
       if (isWriting) promptInput.placeholder = "Prompt to write essays, refine paragraphs, summarize...";
       else if (isData) promptInput.placeholder = "Paste data, ask for chart trends, CSV summaries...";
       else if (isWebDev) promptInput.placeholder = "Prompt AI to code, inspect, inject CDNs, or fix...";
-      else promptInput.placeholder = "Prompt General Agent with anything...";
+      else promptInput.placeholder = "Search web, fetch URLs, read skill.md, or run APIs...";
     }
 
     function toggleLibsModal(open) {
@@ -883,9 +939,7 @@
 
         if (lastRecognizedText.length > 0) {
           voiceDispatchTimer = setTimeout(() => {
-            if (speechRecognizer) {
-              speechRecognizer.stop();
-            }
+            if (speechRecognizer) speechRecognizer.stop();
           }, 1100);
         }
       };
@@ -1600,7 +1654,7 @@
             }
           });
 
-          // Ensure official alias gemini-pro-latest is always included
+          // Ensure official alias gemini-pro-latest is always top of the list
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -1613,7 +1667,7 @@
             modelSelect.appendChild(opt);
           });
 
-          // Strictly default to gemini-pro-latest
+          // Default strictly to gemini-pro-latest
           const target = preferredModel || models.find(m => m === "gemini-pro-latest") || models[0];
           if (target) modelSelect.value = target;
 
@@ -1744,18 +1798,45 @@
     }
 
     function getModeSystemPrompt(customRules, currentFilesContext) {
+      const commonTools = `
+AVAILABLE TOOL ACTIONS:
+1. Multi-Step Plan:
+\`\`\`agent_plan
+["Step 1: description", "Step 2: description"]
+\`\`\`
+
+2. Web Search (Live queries):
+\`\`\`tool_call
+{"action": "web_search", "query": "search query here"}
+\`\`\`
+
+3. Web Page / Documentation Fetch (CORS proxy reader):
+\`\`\`tool_call
+{"action": "web_fetch", "url": "https://example.com/file.md"}
+\`\`\`
+
+4. HTTP Request (For calling external APIs, registering, or webhooks):
+\`\`\`tool_call
+{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+\`\`\`
+
+5. File Creation:
+\`\`\`tool_call
+{"action": "create_file", "filename": "filename.ext", "content": "..."}
+\`\`\``;
+
       if (activeMode === "writing") {
         return `You are an Expert Writer and Document Editor.
 Project Rules: ${customRules}
 Active Document: "${activeFileName}"
 Workspace Files:
 ${currentFilesContext}
+${commonTools}
 
 Return your main document content updated in:
 \`\`\`filepath:${activeFileName}
 (your markdown text here)
-\`\`\`
-Provide clear narrative prose, essays, or drafts.`;
+\`\`\``;
       }
 
       if (activeMode === "data") {
@@ -1763,9 +1844,9 @@ Provide clear narrative prose, essays, or drafts.`;
 Project Rules: ${customRules}
 Current Files:
 ${currentFilesContext}
+${commonTools}
 
-You can output data to 'data.csv' or interactive Chart.js scripts to 'chart.js'.
-Format your files like:
+Format files like:
 \`\`\`filepath:data.csv
 Column1,Column2
 A,10
@@ -1774,39 +1855,33 @@ B,20
       }
 
       if (activeMode === "general") {
-        return `You are an Unconstrained Autonomous Problem Solver and Thinking Agent.
+        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing and API capabilities.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 Files:
 ${currentFilesContext}
+${commonTools}
 
-You can answer directly in conversational text, formulate plans, or write artifacts into files using:
+You can browse web pages, read documentation, call public APIs, answer questions directly, or write artifacts into files using:
 \`\`\`filepath:${activeFileName}
 (content)
 \`\`\``;
       }
 
-      return `You are an Autonomous Software Agent capable of planning, creating files, and calling tools.
+      return `You are an Autonomous Software Agent capable of planning, creating files, browsing the web, and calling tools.
 Project Rules: ${customRules}
 Currently Active File: "${activeFileName}"
 All Available Files:
 ${currentFilesContext}
+${commonTools}
 
-AVAILABLE TOOL ACTIONS:
-1. Multi-Step Plan:
-\`\`\`agent_plan
-["Step 1: description", "Step 2: description"]
-\`\`\`
-2. Autonomous CDN Injection:
+6. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
-3. Autonomous File Creation:
-\`\`\`tool_call
-{"action": "create_file", "filename": "auth.js", "content": "// code"}
-\`\`\`
-4. Code Updates:
+
+7. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -1972,6 +2047,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
+        // Parse & Render Multi-Step Plan
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
         if (planMatch && planMatch[1]) {
           try {
@@ -1979,20 +2055,36 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
+        // Execute Autonomous Tool Calls
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
             if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
-              appendChat("system-agent", `⚡ Tool Executed: Injected CDN '${tool.library}'`);
+              appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
             } else if (tool.action === "create_file" && tool.filename) {
               agentCreateFile(tool.filename, tool.content || "");
-              appendChat("system-agent", `📁 File Created: '${tool.filename}'`);
+              appendChat("system-agent", `📁 Tool: Created file '${tool.filename}'`);
+            } else if (tool.action === "web_search" && tool.query) {
+              appendChat("system-agent", `🔍 Searching web: "${tool.query}"...`);
+              const results = await agentWebSearch(tool.query);
+              appendChat("system-agent", `🌐 Results:\n${results}`);
+            } else if (tool.action === "web_fetch" && tool.url) {
+              appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
+              const content = await agentWebFetch(tool.url);
+              appendChat("system-agent", `📄 Extracted:\n${content.slice(0, 600)}...`);
+            } else if (tool.action === "http_request" && tool.url) {
+              appendChat("system-agent", `📡 HTTP ${tool.method || "GET"}: ${tool.url}...`);
+              const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
+              appendChat("system-agent", `📬 Response:\n${resp}`);
             }
-          } catch(err) {}
+          } catch(err) {
+            console.warn("Tool parse error:", err);
+          }
         }
 
+        // Parse File Patches / Artifacts
         const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
         let matched;
         let codeUpdated = false;
