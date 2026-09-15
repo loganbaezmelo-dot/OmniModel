@@ -723,15 +723,18 @@
 
     async function syncUserToVercelKV() {
       const userId = getOrInitUserId();
+      const apiKey = document.getElementById("api-key-input").value.trim();
       const current = getActiveSession();
-      const notes = current?.files["notes.txt"] || "";
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
       const statusEl = document.getElementById("kv-sync-status");
 
-      // Extract agent credentials from notes.txt
-      const keyMatch = notes.match(/Agent Key:\s*([a-zA-Z0-9_-]+)/);
-      const aibookKey = keyMatch ? keyMatch[1] : null;
-      const apiKey = document.getElementById("api-key-input").value.trim();
-      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
+      if (!apiKey) {
+        if (statusEl) {
+          statusEl.innerText = "Key Missing";
+          statusEl.style.color = "var(--danger)";
+        }
+        return;
+      }
 
       if (statusEl) statusEl.innerText = "Syncing...";
 
@@ -741,22 +744,21 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId,
-            aibookKey,
             apiKey,
             model,
             active: true,
-            schedulePrompt: "Run heartbeat.md, solve challenge if needed, and broadcast status."
+            schedules: agentSchedules
           })
         });
 
         if (res.ok) {
           if (statusEl) {
-            statusEl.innerText = "Synced (Active)";
+            statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: User [${userId}] registered in Vercel KV. Server runs every 30m!`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: ${agentSchedules.length} tasks registered in Vercel KV for user [${userId}].`);
         } else {
-          throw new Error("API returned status " + res.status);
+          throw new Error("HTTP " + res.status);
         }
       } catch (err) {
         if (statusEl) {
@@ -808,6 +810,8 @@
     function saveSchedules() {
       localStorage.setItem("omni_agent_schedules", JSON.stringify(agentSchedules));
       renderSchedulesList();
+      // Sync to cloud KV whenever schedules change
+      syncUserToVercelKV();
     }
 
     function setAgentSchedule(id, intervalMinutes, prompt) {
@@ -1944,6 +1948,7 @@
     function saveCurrentKey() {
       const provider = document.getElementById("provider-select").value;
       localStorage.setItem(`omni_key_${provider}`, document.getElementById("api-key-input").value.trim());
+      syncUserToVercelKV();
     }
 
     function onProviderChange(preferredModel = null) {
@@ -2193,7 +2198,7 @@ AVAILABLE TOOL ACTIONS:
 {"action": "web_fetch", "url": "https://example.com/file.md"}
 \`\`\`
 
-4. HTTP Request (APIs, Registration, Broadcasts):
+4. HTTP Request (APIs, Webhooks, Actions):
 \`\`\`tool_call
 {"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
 \`\`\`
@@ -2210,16 +2215,16 @@ AVAILABLE TOOL ACTIONS:
 
 7. Save to Long-Term Memory (Persistent across ALL General Agent chats):
 \`\`\`tool_call
-{"action": "save_to_longterm_memory", "key": "aibook_agent", "content": "Agent Key: ak_..., status, protocols..."}
+{"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
 \`\`\`
 Or copy an entire file directly to long-term memory:
 \`\`\`tool_call
 {"action": "save_to_longterm_memory", "from_file": "notes.txt"}
 \`\`\`
 
-8. Set Autonomous Recurring In-Tab Schedule:
+8. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
-{"action": "set_schedule", "id": "aibook_heartbeat", "intervalMinutes": 30, "prompt": "Read heartbeat.md and check feed for actions."}
+{"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -2254,7 +2259,7 @@ B,20
       if (activeMode === "general") {
         const longTermMem = JSON.stringify(getLongTermMemory(), null, 2);
         const schedulesContext = JSON.stringify(agentSchedules, null, 2);
-        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, Persistent Long-Term Memory, and In-Tab Scheduling.
+        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 Files:
@@ -2263,12 +2268,12 @@ ${currentFilesContext}
 [GLOBAL LONG-TERM MEMORY VAULT]:
 ${longTermMem}
 
-[ACTIVE IN-TAB RECURRING SCHEDULES]:
+[ACTIVE RECURRING SCHEDULES (Synced to Vercel KV)]:
 ${schedulesContext}
 
 ${commonTools}
 
-If instructed to execute routine jobs (e.g. heartbeat routines every X minutes), register a recurring schedule using the 'set_schedule' tool action!
+Whenever you are asked to register a recurring routine or scheduled check, use the 'set_schedule' tool action so it registers for both in-tab execution and cloud background cron!
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
 
@@ -2556,11 +2561,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         saveSessions();
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
-
-        // Auto sync user credentials to KV whenever an Agent Key is detected in notes.txt
-        if (current.files["notes.txt"] && current.files["notes.txt"].includes("Agent Key:")) {
-          syncUserToVercelKV();
-        }
 
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           setLoopUI(true);
