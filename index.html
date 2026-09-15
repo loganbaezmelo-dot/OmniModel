@@ -710,6 +710,7 @@
     let isGenerating = false;
     let activeAbortController = null;
     let isAutoLooping = false;
+    let autonomousHopCount = 0;
 
     // --- USER IDENTIFICATION & VERCEL KV CRON SYNC ---
     function getOrInitUserId() {
@@ -810,7 +811,6 @@
     function saveSchedules() {
       localStorage.setItem("omni_agent_schedules", JSON.stringify(agentSchedules));
       renderSchedulesList();
-      // Sync to cloud KV whenever schedules change
       syncUserToVercelKV();
     }
 
@@ -959,6 +959,7 @@
 
     function stopAutonomousCycle() {
       isAutoLooping = false;
+      autonomousHopCount = 0;
       if (activeAbortController) {
         activeAbortController.abort();
       }
@@ -2562,7 +2563,34 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
+        // Track consecutive client hops
+        if (!autoFollowUpPrompt) {
+          autonomousHopCount = 0;
+        } else {
+          autonomousHopCount++;
+        }
+
+        // 3-Step Circuit Breaker with Cloud Cron Handoff
         if (autoFollowUpPrompt && !agentExplicitFinished) {
+          if (autonomousHopCount >= 3) {
+            const handoffId = `handoff_${Date.now()}`;
+            appendChat(
+              "system-agent",
+              `🛑 Reached 3-step in-tab limit! To prevent quota drops, the agent has paused and offloaded the remainder of this task to the Cloud Cron schedule [${handoffId}]. Vercel KV will complete it in the background!`
+            );
+
+            // Register a 1-minute handoff routine in schedules
+            setAgentSchedule(
+              handoffId,
+              1,
+              `[OFFLOADED TASK HANDOFF]: Continue execution from step 3 observations:\n${autoFollowUpPrompt}`
+            );
+
+            setLoopUI(false);
+            autonomousHopCount = 0;
+            return;
+          }
+
           setLoopUI(true);
           promptInput.value = autoFollowUpPrompt;
           setTimeout(() => {
@@ -2572,11 +2600,13 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           }, 2500);
         } else {
           setLoopUI(false);
+          autonomousHopCount = 0;
         }
 
       } catch (err) {
         clearTimeout(timeoutId);
         setLoopUI(false);
+        autonomousHopCount = 0;
         let errorMsg = err.message;
         if (err.name === "AbortError") {
           statusDot.className = "status-dot offline";
