@@ -687,11 +687,11 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Native Node.js Proxy Caller (Falls back to public proxies if serverless isn't deployed yet)
+    // Resilient Gateway: Checks Node API, but seamlessly cascades to Direct Browser Fetch upon Vercel 500
     async function callBackendProxy(targetUrl, method = "GET", headers = {}, body = null) {
       const payload = { targetUrl, method: method.toUpperCase(), headers, body };
 
-      // 1. Check native Node serverless route (/api/proxy)
+      // 1. Try native Node serverless route (/api/proxy)
       try {
         const nodeRes = await fetch("/api/proxy", {
           method: "POST",
@@ -699,19 +699,20 @@
           body: JSON.stringify(payload)
         });
 
-        if (nodeRes.status !== 404) {
+        // Only accept if it actually succeeded without crashing
+        if (nodeRes.ok) {
           const contentType = nodeRes.headers.get("content-type") || "";
           if (contentType.includes("application/json")) {
             const json = await nodeRes.json();
-            return { ok: nodeRes.ok, status: nodeRes.status, data: json.contents || JSON.stringify(json) };
+            return { ok: true, status: nodeRes.status, data: json.contents || JSON.stringify(json) };
           } else {
             const text = await nodeRes.text();
-            return { ok: nodeRes.ok, status: nodeRes.status, data: text };
+            return { ok: true, status: nodeRes.status, data: text };
           }
         }
       } catch (nodeErr) {}
 
-      // 2. Direct browser fetch with CORS
+      // 2. Direct browser fetch (Bypasses serverless crash; works natively for skill.md)
       try {
         const directOpts = {
           method: method.toUpperCase(),
@@ -722,11 +723,15 @@
           directOpts.body = typeof body === "string" ? body : JSON.stringify(body);
         }
         const directRes = await fetch(targetUrl, directOpts);
-        const directText = await directRes.text();
-        return { ok: directRes.ok, status: directRes.status, data: directText };
+        if (directRes.ok) {
+          const directText = await directRes.text();
+          if (directText && directText.trim().length > 5) {
+            return { ok: true, status: directRes.status, data: directText };
+          }
+        }
       } catch (directErr) {}
 
-      // 3. Fallback to public gateway proxies
+      // 3. Fallback to reliable public proxies
       const publicProxies = [
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
@@ -757,7 +762,7 @@
       return { ok: false, status: 500, data: "Target unreachable across all gateways." };
     }
 
-    // Direct & Node Document Fetcher (Zero cutoffs, fully intact)
+    // Direct & Node Document Fetcher (Whole document preserved intact)
     async function agentWebFetch(targetUrl) {
       const res = await callBackendProxy(targetUrl, "GET");
       if (!res.ok) {
@@ -2171,7 +2176,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Autonomous Tool Runner with Auto-Save and Observation Loop
+        // Autonomous Tool Runner with Workspace Persistence & Fail-Fast Loop Guards
         let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
@@ -2197,7 +2202,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
                 if (!inferredName.includes(".")) inferredName += ".txt";
                 
-                // Directly write and activate in files tree
+                // Write and activate in files tree
                 current.files[inferredName] = content;
                 activeFileName = inferredName;
                 saveSessions();
