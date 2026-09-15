@@ -686,7 +686,7 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Multi-Proxy Cascade with Real-Time Header Verification & Direct Text Parsing
+    // 4-Tier Public Proxy Cascade with direct text parser
     async function agentWebFetch(targetUrl) {
       const proxies = [
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
@@ -712,7 +712,6 @@
 
           if (!raw || raw.trim().length < 5) continue;
 
-          // If content is pure markdown or plain text, return directly
           if (!raw.includes("<html") && !raw.includes("<!DOCTYPE") && (raw.includes("#") || raw.includes("\n"))) {
             return raw.slice(0, 4500);
           }
@@ -732,7 +731,6 @@
       return `Failed to fetch URL: Target unreachable via all public CORS gateways.`;
     }
 
-    // Direct DuckDuckGo JSON API + Wikipedia Instant Fallback
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
@@ -767,7 +765,6 @@
           }
         }
 
-        // Wikipedia Open-CORS Search Fallback
         const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=3&namespace=0&format=json&origin=*`);
         const wikiData = await wikiRes.json();
         if (wikiData && wikiData[1] && wikiData[1].length) {
@@ -1281,7 +1278,7 @@
         historyIdx: 0,
         messages: [],
         selectedProvider: "gemini",
-        selectedModel: "gemini-3-flash-preview"
+        selectedModel: "gemini-pro-latest"
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
@@ -1361,7 +1358,7 @@
       renderFileTree();
       loadFileEditor();
       renderSandboxPreview();
-      onProviderChange(current.selectedModel || "gemini-3-flash-preview");
+      onProviderChange(current.selectedModel || "gemini-pro-latest");
     }
 
     function renderSandboxPreview() {
@@ -1716,11 +1713,12 @@
             }
           });
 
-          // Filter out deprecated models
+          // Filter out deprecated versions
           models = models.filter(m => !m.includes("2.5") && !m.includes("1.5") && !m.includes("2.0"));
 
-          if (!models.includes("gemini-3-flash-preview")) {
-            models.unshift("gemini-3-flash-preview");
+          // Always ensure gemini-pro-latest is present
+          if (!models.includes("gemini-pro-latest")) {
+            models.unshift("gemini-pro-latest");
           }
 
           modelSelect.innerHTML = "";
@@ -1731,8 +1729,9 @@
             modelSelect.appendChild(opt);
           });
 
+          // Strictly default to gemini-pro-latest unless previously specified
           const chosen = preferredModel || current?.selectedModel;
-          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m.includes("3-flash")) || models.find(m => m.includes("3.1-pro")) || models[0]);
+          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m === "gemini-pro-latest") || models[0]);
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
@@ -2025,15 +2024,16 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  // Strictly upgrade UPWARDS, never backwards to deprecated 2.x or 1.x
+                  // Ban 2.x and 1.x legacy models from fallback candidates
                   const modelOptions = Array.from(document.getElementById("model-select").options)
                     .map(o => o.value)
                     .filter(m => !m.includes("2.5") && !m.includes("2.0") && !m.includes("1.5"));
 
+                  // Upgrade path strictly without downgrading
                   let upgradeCandidate = null;
                   if (model.includes("flash")) {
-                    upgradeCandidate = modelOptions.find(m => m.includes("3.1-pro") && m !== model) ||
-                                       modelOptions.find(m => m.includes("pro-latest") && m !== model);
+                    upgradeCandidate = modelOptions.find(m => m === "gemini-pro-latest" && m !== model) ||
+                                       modelOptions.find(m => m.includes("3.1-pro") && m !== model);
                   } else {
                     upgradeCandidate = modelOptions.find(m => m.includes("3-flash") && m !== model);
                   }
@@ -2217,7 +2217,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Autonomous Follow-Up Trigger (Without switching models backwards)
+        // Autonomous Follow-Up Trigger (Carrying strict model selection forward)
         if (autoFollowUpPrompt) {
           promptInput.value = autoFollowUpPrompt;
           setTimeout(() => sendMessage(), 600);
