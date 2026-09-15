@@ -666,6 +666,7 @@
     let lastRecognizedText = "";
     let consoleLogCount = 0;
     let isGenerating = false;
+    let autonomousLoopCount = 0;
 
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
@@ -686,25 +687,52 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Direct Browser Fetch First, then 3 Fallback Gateways (No arbitrary cutoffs)
-    async function agentWebFetch(targetUrl) {
+    // Native Node.js Proxy Caller (Falls back to public proxies if serverless isn't deployed yet)
+    async function callBackendProxy(targetUrl, method = "GET", headers = {}, body = null) {
+      const payload = { targetUrl, method: method.toUpperCase(), headers, body };
+
+      // 1. Check native Node serverless route (/api/proxy)
       try {
-        const directRes = await fetch(targetUrl, { mode: 'cors' });
-        if (directRes.ok) {
-          const rawText = await directRes.text();
-          if (rawText && rawText.trim().length > 5) {
-            return cleanWebContent(rawText);
+        const nodeRes = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (nodeRes.status !== 404) {
+          const contentType = nodeRes.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const json = await nodeRes.json();
+            return { ok: nodeRes.ok, status: nodeRes.status, data: json.contents || JSON.stringify(json) };
+          } else {
+            const text = await nodeRes.text();
+            return { ok: nodeRes.ok, status: nodeRes.status, data: text };
           }
         }
+      } catch (nodeErr) {}
+
+      // 2. Direct browser fetch with CORS
+      try {
+        const directOpts = {
+          method: method.toUpperCase(),
+          headers: { "Content-Type": "application/json", ...headers },
+          mode: "cors"
+        };
+        if (body && method.toUpperCase() !== "GET") {
+          directOpts.body = typeof body === "string" ? body : JSON.stringify(body);
+        }
+        const directRes = await fetch(targetUrl, directOpts);
+        const directText = await directRes.text();
+        return { ok: directRes.ok, status: directRes.status, data: directText };
       } catch (directErr) {}
 
-      const proxies = [
-        url => `/api/proxy?url=${encodeURIComponent(url)}`,
+      // 3. Fallback to public gateway proxies
+      const publicProxies = [
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
       ];
 
-      for (let proxyFn of proxies) {
+      for (let proxyFn of publicProxies) {
         try {
           const res = await fetch(proxyFn(targetUrl));
           if (!res.ok) continue;
@@ -719,19 +747,28 @@
           }
 
           if (raw && raw.trim().length > 5) {
-            return cleanWebContent(raw);
+            return { ok: true, status: 200, data: raw };
           }
         } catch (err) {
           continue;
         }
       }
 
-      return `Failed to fetch URL: Target blocked direct browser access and public proxies.`;
+      return { ok: false, status: 500, data: "Target unreachable across all gateways." };
+    }
+
+    // Direct & Node Document Fetcher (Zero cutoffs, fully intact)
+    async function agentWebFetch(targetUrl) {
+      const res = await callBackendProxy(targetUrl, "GET");
+      if (!res.ok) {
+        return `Failed to fetch URL: ${res.data}`;
+      }
+      return cleanWebContent(res.data);
     }
 
     function cleanWebContent(raw) {
       if (!raw.includes("<html") && !raw.includes("<!DOCTYPE")) {
-        return raw; // Preserve whole markdown / json / text without cutting off
+        return raw;
       }
       const doc = new DOMParser().parseFromString(raw, "text/html");
       doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
@@ -744,19 +781,10 @@
         const encoded = encodeURIComponent(query);
         const ddgJsonUrl = `https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`;
         
-        const proxies = [
-          url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-          url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-          url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
-        ];
-
-        for (let pFn of proxies) {
+        const res = await callBackendProxy(ddgJsonUrl, "GET");
+        if (res.ok) {
           try {
-            const res = await fetch(pFn(ddgJsonUrl));
-            if (!res.ok) continue;
-            const data = await res.json();
-            const parsed = typeof data.contents === "string" ? JSON.parse(data.contents) : data;
-
+            const parsed = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
             let results = [];
             if (parsed.AbstractText) {
               results.push(`• ${parsed.Heading || query}: ${parsed.AbstractText} (${parsed.AbstractURL})`);
@@ -766,11 +794,8 @@
                 if (t.Text && t.FirstURL) results.push(`• ${t.Text} (${t.FirstURL})`);
               });
             }
-
             if (results.length) return results.join("\n");
-          } catch(e) {
-            continue;
-          }
+          } catch(e) {}
         }
 
         const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=3&namespace=0&format=json&origin=*`);
@@ -790,20 +815,11 @@
     }
 
     async function agentHttpRequest(method, url, headers = {}, body = null) {
-      try {
-        const opts = {
-          method: method.toUpperCase(),
-          headers: { "Content-Type": "application/json", ...headers }
-        };
-        if (body && method.toUpperCase() !== "GET") {
-          opts.body = typeof body === "string" ? body : JSON.stringify(body);
-        }
-        const res = await fetch(url, opts);
-        const text = await res.text();
-        return `Status ${res.status}: ${text.slice(0, 2000)}`;
-      } catch (err) {
-        return `HTTP Request failed: ${err.message}`;
+      const res = await callBackendProxy(url, method, headers, body);
+      if (!res.ok) {
+        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
       }
+      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1717,7 +1733,6 @@
           
           data.models.forEach(m => {
             const name = m.name.replace("models/", "");
-            // Filter out non-agent Gemma and sunset legacy checkpoints completely
             if (
               m.supportedGenerationMethods?.includes("generateContent") &&
               !name.includes("gemma") &&
@@ -1729,7 +1744,6 @@
             }
           });
 
-          // Always pin gemini-pro-latest
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -2157,7 +2171,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Autonomous Tool Runner with Observation Loop & HARDCODED WORKSPACE PERSISTENCE
+        // Autonomous Tool Runner with Auto-Save and Observation Loop
         let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
@@ -2179,7 +2193,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
               const content = await agentWebFetch(tool.url);
               
-              // HARDCODED FALLBACK PERSISTENCE: Save file straight to workspace files so it's never lost
               if (!content.startsWith("Failed to fetch")) {
                 let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
                 if (!inferredName.includes(".")) inferredName += ".txt";
@@ -2240,9 +2253,18 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        if (autoFollowUpPrompt) {
-          promptInput.value = autoFollowUpPrompt;
-          setTimeout(() => sendMessage(), 600);
+        // Autonomous Follow-Up Trigger with Loop Recursion Brake
+        if (autoFollowUpPrompt && autonomousLoopCount < 3) {
+          if (autoFollowUpPrompt.includes("failed") || autoFollowUpPrompt.includes("Failed")) {
+            autonomousLoopCount = 0;
+            appendChat("system-agent", "🛑 Autonomous cycle paused: Tool reported a failure. Halting to prevent rate-limit exhaustion.");
+          } else {
+            autonomousLoopCount++;
+            promptInput.value = autoFollowUpPrompt;
+            setTimeout(() => sendMessage(), 800);
+          }
+        } else {
+          autonomousLoopCount = 0;
         }
 
       } catch (err) {
