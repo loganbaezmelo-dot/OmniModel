@@ -190,6 +190,14 @@
     .media-btn { padding: 10px 12px; background: #252a36; border: 1px solid var(--border); font-size: 16px; display: grid; place-content: center; }
     .media-btn.recording { background: var(--danger); animation: pulse 1s infinite alternate; }
     .media-btn.auto-send-active { border-color: var(--success); color: var(--success); }
+    
+    .stop-btn {
+      background: var(--danger) !important;
+      color: #fff !important;
+      display: none;
+      font-weight: bold;
+    }
+
     @keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
 
     .file-tree-bar {
@@ -556,6 +564,7 @@
         <button id="voice-btn" class="media-btn auto-send-active" title="Voice Auto-Send: Active ⚡" onclick="toggleVoiceInput()">🎙️</button>
         <textarea id="prompt-input" placeholder="Prompt AI..."></textarea>
         <button id="send-btn" onclick="sendMessage()">Send</button>
+        <button id="stop-btn" class="stop-btn" onclick="stopAutonomousCycle()">🛑 Stop</button>
       </div>
     </div>
 
@@ -666,7 +675,8 @@
     let lastRecognizedText = "";
     let consoleLogCount = 0;
     let isGenerating = false;
-    let autonomousLoopCount = 0;
+    let activeAbortController = null;
+    let isAutoLooping = false;
 
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
@@ -687,11 +697,31 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Resilient Gateway: Node proxy -> Direct Browser Fetch -> Public Gateways
+    function setLoopUI(active) {
+      isAutoLooping = active;
+      const sendBtn = document.getElementById("send-btn");
+      const stopBtn = document.getElementById("stop-btn");
+      if (active) {
+        sendBtn.style.display = "none";
+        stopBtn.style.display = "inline-block";
+      } else {
+        sendBtn.style.display = "inline-block";
+        stopBtn.style.display = "none";
+      }
+    }
+
+    function stopAutonomousCycle() {
+      isAutoLooping = false;
+      if (activeAbortController) {
+        activeAbortController.abort();
+      }
+      setLoopUI(false);
+      appendChat("system-agent", "🛑 Autonomous cycle terminated by user.");
+    }
+
     async function callBackendProxy(targetUrl, method = "GET", headers = {}, body = null) {
       const payload = { targetUrl, method: method.toUpperCase(), headers, body };
 
-      // 1. Try native Node serverless route (/api/proxy)
       try {
         const nodeRes = await fetch("/api/proxy", {
           method: "POST",
@@ -711,7 +741,6 @@
         }
       } catch (nodeErr) {}
 
-      // 2. Direct browser fetch (Works cleanly for skill.md)
       try {
         const directOpts = {
           method: method.toUpperCase(),
@@ -730,7 +759,6 @@
         }
       } catch (directErr) {}
 
-      // 3. Fallback to public proxies
       const publicProxies = [
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
@@ -1717,7 +1745,6 @@
       saveCurrentKey();
       statusText.innerText = "Discovering models...";
 
-      // Remember the user's current selection before repopulating
       const existingDomVal = modelSelect.value;
 
       try {
@@ -1730,7 +1757,6 @@
           
           data.models.forEach(m => {
             const name = m.name.replace("models/", "");
-            // STRICT BAN: Never include 2.5, 2.0, 1.5, or gemma in the model options
             if (
               m.supportedGenerationMethods?.includes("generateContent") &&
               !name.includes("gemma") &&
@@ -1754,7 +1780,6 @@
             modelSelect.appendChild(opt);
           });
 
-          // LOCK THE CHOICE: Keep DOM selection first, session selection second, and fallback to gemini-pro-latest
           if (existingDomVal && models.includes(existingDomVal)) {
             modelSelect.value = existingDomVal;
           } else if (preferredModel && models.includes(preferredModel)) {
@@ -1905,7 +1930,7 @@ AVAILABLE TOOL ACTIONS:
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Web Search (Live queries):
+2. Web Search:
 \`\`\`tool_call
 {"action": "web_search", "query": "search query here"}
 \`\`\`
@@ -1915,7 +1940,7 @@ AVAILABLE TOOL ACTIONS:
 {"action": "web_fetch", "url": "https://example.com/file.md"}
 \`\`\`
 
-4. HTTP Request (For calling external APIs, registering, or webhooks):
+4. HTTP Request (APIs, Registration, Broadcasts):
 \`\`\`tool_call
 {"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
 \`\`\`
@@ -1923,6 +1948,11 @@ AVAILABLE TOOL ACTIONS:
 5. File Creation:
 \`\`\`tool_call
 {"action": "create_file", "filename": "filename.ext", "content": "..."}
+\`\`\`
+
+6. Explicit Goal Complete (Use this when your objective is finished):
+\`\`\`tool_call
+{"action": "finish", "message": "Objective completed successfully."}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -1962,10 +1992,7 @@ Files:
 ${currentFilesContext}
 ${commonTools}
 
-You can browse web pages, read documentation, call public APIs, answer questions directly, or write artifacts into files using:
-\`\`\`filepath:${activeFileName}
-(content)
-\`\`\``;
+Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
 
       return `You are an Autonomous Software Agent capable of planning, creating files, browsing the web, and calling tools.
@@ -1975,13 +2002,13 @@ All Available Files:
 ${currentFilesContext}
 ${commonTools}
 
-6. Autonomous CDN Injection:
+7. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-7. Code Updates:
+8. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -1994,7 +2021,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const provider = document.getElementById("provider-select").value;
       
       const current = getActiveSession();
-      let model = document.getElementById("model-select").value || current?.selectedModel;
+      const model = document.getElementById("model-select").value || current?.selectedModel;
       
       const customRules = localStorage.getItem("omni_cursorrules") || "";
       const statusText = document.getElementById("status-text");
@@ -2003,6 +2030,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       if (!navigator.onLine) {
         statusDot.className = "status-dot offline";
         statusText.innerText = "❌ Network dropped!";
+        setLoopUI(false);
         return alert("Cannot send prompt: Internet connection dropped!");
       }
 
@@ -2023,8 +2051,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
-      const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => timeoutController.abort(), 90000);
+      activeAbortController = new AbortController();
+      const timeoutId = setTimeout(() => activeAbortController.abort(), 90000);
 
       try {
         let reply = "";
@@ -2041,7 +2069,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ contents: [{ role: "user", parts }] }),
-                signal: timeoutController.signal
+                signal: activeAbortController.signal
               });
               const data = await res.json();
 
@@ -2056,7 +2084,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  // RETRY ON THE SAME MODEL: Do not overwrite the dropdown!
                   loadingMsg.innerText = `⚠️ Google servers busy. Retrying with ${model} in 3s... (${retries} left)`;
                   await new Promise(r => setTimeout(r, 3000));
                   continue;
@@ -2098,7 +2125,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   model: model,
                   messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
                 }),
-                signal: timeoutController.signal
+                signal: activeAbortController.signal
               });
               const data = await res.json();
               if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -2127,7 +2154,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   max_tokens: 4096,
                   messages: [{ role: "user", content }]
                 }),
-                signal: timeoutController.signal
+                signal: activeAbortController.signal
               });
               const data = await res.json();
               if (data.error) throw new Error(data.error.message);
@@ -2156,14 +2183,17 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Autonomous Tool Runner with Auto-Save and Observation Loop
         let autoFollowUpPrompt = "";
+        let agentExplicitFinished = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
-            if (tool.action === "inject_cdn" && tool.library) {
+            if (tool.action === "finish") {
+              agentExplicitFinished = true;
+              appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+            } else if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
               appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
             } else if (tool.action === "create_file" && tool.filename) {
@@ -2237,27 +2267,27 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Autonomous Follow-Up Trigger with Loop Recursion Brake
-        if (autoFollowUpPrompt && autonomousLoopCount < 3) {
-          if (autoFollowUpPrompt.includes("failed") || autoFollowUpPrompt.includes("Failed")) {
-            autonomousLoopCount = 0;
-            appendChat("system-agent", "🛑 Autonomous cycle paused: Tool reported a failure. Halting to prevent rate-limit exhaustion.");
-          } else {
-            autonomousLoopCount++;
-            promptInput.value = autoFollowUpPrompt;
-            setTimeout(() => sendMessage(), 800);
-          }
+        // Continuous Loop Runner: Only stops on explicit user click (Stop button) or AI calling "finish"
+        if (autoFollowUpPrompt && !agentExplicitFinished) {
+          setLoopUI(true);
+          promptInput.value = autoFollowUpPrompt;
+          setTimeout(() => {
+            if (isAutoLooping) {
+              sendMessage();
+            }
+          }, 800);
         } else {
-          autonomousLoopCount = 0;
+          setLoopUI(false);
         }
 
       } catch (err) {
         clearTimeout(timeoutId);
+        setLoopUI(false);
         let errorMsg = err.message;
         if (err.name === "AbortError") {
           statusDot.className = "status-dot offline";
-          statusText.innerText = "❌ Request Timed Out (90s)";
-          errorMsg = "Request timed out after 90 seconds. The model may be running too slow or experiencing peak traffic.";
+          statusText.innerText = "🛑 Halted";
+          errorMsg = "Autonomous run stopped by user.";
         } else if (!navigator.onLine) {
           statusDot.className = "status-dot offline";
           statusText.innerText = "❌ Network Dropped";
@@ -2266,31 +2296,23 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           statusDot.className = "status-dot active";
           statusText.innerText = "⚠️ API Error";
         }
-        loadingMsg.innerText = "⚠️ Failed: " + errorMsg;
+        loadingMsg.innerText = "⚠️ " + errorMsg;
       } finally {
         isGenerating = false;
+        activeAbortController = null;
       }
     }
 
-    // Safe Link Formatter: Cleans raw text, fixes broken bolding, and makes links clickable
     function formatChatText(text) {
       if (!text) return "";
-      
-      // 1. Clean bold wrappers around links: **[url](url)** or **url**
       let cleaned = text.replace(/\*\*(\[.*?\]\(.*?\))\*\*/g, '$1');
-
-      // 2. Escape basic entities
       let safe = cleaned
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-      // 3. Render markdown links [label](url) cleanly
       safe = safe.replace(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#818cf8; text-decoration:underline; font-weight:bold;">$1</a>');
-
-      // 4. Auto-link plain URLs without bricking existing hrefs
       safe = safe.replace(/(^|[^">])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#818cf8; text-decoration:underline;">$2</a>');
-
       return safe;
     }
 
