@@ -25,23 +25,20 @@ export default async function handler(req, res) {
     if (typeof payload === "string") {
       try { payload = JSON.parse(payload); } catch(e) { payload = {}; }
     }
-    const { userId, aibookKey, apiKey, active, schedulePrompt } = payload || {};
+    const { userId, apiKey, model, schedules, active } = payload || {};
 
     if (!userId) return res.status(400).json({ error: "userId is required" });
 
-    // Save user configuration into KV
     await kvCmd("set", `agent:user:${userId}`, JSON.stringify({
       userId,
-      aibookKey,
       apiKey,
+      model: model || "gemini-pro-latest",
+      schedules: schedules || [],
       active: active ?? true,
-      schedulePrompt: schedulePrompt || "Automated Heartbeat",
       updatedAt: new Date().toISOString()
     }));
 
-    // Add user to set of all users
     await kvCmd("sadd", "all_agent_users", userId);
-
     return res.status(200).json({ success: true, userId });
   }
 
