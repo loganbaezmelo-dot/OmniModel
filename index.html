@@ -141,7 +141,7 @@
     .plan-step-item.done { color: var(--success); text-decoration: line-through; opacity: 0.7; }
 
     #chat-history { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; }
+    .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
     .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
     .msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
     .msg.system-agent {
@@ -687,7 +687,7 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Resilient Gateway: Checks Node API, but seamlessly cascades to Direct Browser Fetch upon Vercel 500
+    // Resilient Gateway: Node proxy -> Direct Browser Fetch -> Public Gateways
     async function callBackendProxy(targetUrl, method = "GET", headers = {}, body = null) {
       const payload = { targetUrl, method: method.toUpperCase(), headers, body };
 
@@ -699,7 +699,6 @@
           body: JSON.stringify(payload)
         });
 
-        // Only accept if it actually succeeded without crashing
         if (nodeRes.ok) {
           const contentType = nodeRes.headers.get("content-type") || "";
           if (contentType.includes("application/json")) {
@@ -712,7 +711,7 @@
         }
       } catch (nodeErr) {}
 
-      // 2. Direct browser fetch (Bypasses serverless crash; works natively for skill.md)
+      // 2. Direct browser fetch (Works cleanly for skill.md)
       try {
         const directOpts = {
           method: method.toUpperCase(),
@@ -731,7 +730,7 @@
         }
       } catch (directErr) {}
 
-      // 3. Fallback to reliable public proxies
+      // 3. Fallback to public proxies
       const publicProxies = [
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
         url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
@@ -762,7 +761,6 @@
       return { ok: false, status: 500, data: "Target unreachable across all gateways." };
     }
 
-    // Direct & Node Document Fetcher (Whole document preserved intact)
     async function agentWebFetch(targetUrl) {
       const res = await callBackendProxy(targetUrl, "GET");
       if (!res.ok) {
@@ -1372,15 +1370,7 @@
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
       current.messages.forEach(m => {
-        const div = document.createElement("div");
-        div.className = `msg ${m.role}`;
-        div.innerText = m.text;
-        if (m.img) {
-          const im = document.createElement("img");
-          im.src = m.img;
-          div.appendChild(im);
-        }
-        historyDiv.appendChild(div);
+        appendChat(m.role, m.text, m.img || null, false);
       });
       historyDiv.scrollTop = historyDiv.scrollHeight;
 
@@ -1726,7 +1716,9 @@
       if (!key) return;
       saveCurrentKey();
       statusText.innerText = "Discovering models...";
-      modelSelect.innerHTML = '<option value="">Loading...</option>';
+
+      // Remember the user's current selection before repopulating
+      const existingDomVal = modelSelect.value;
 
       try {
         let models = [];
@@ -1738,6 +1730,7 @@
           
           data.models.forEach(m => {
             const name = m.name.replace("models/", "");
+            // STRICT BAN: Never include 2.5, 2.0, 1.5, or gemma in the model options
             if (
               m.supportedGenerationMethods?.includes("generateContent") &&
               !name.includes("gemma") &&
@@ -1761,9 +1754,16 @@
             modelSelect.appendChild(opt);
           });
 
-          const chosen = preferredModel || current?.selectedModel;
-          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m === "gemini-pro-latest") || models[0]);
-          if (target) modelSelect.value = target;
+          // LOCK THE CHOICE: Keep DOM selection first, session selection second, and fallback to gemini-pro-latest
+          if (existingDomVal && models.includes(existingDomVal)) {
+            modelSelect.value = existingDomVal;
+          } else if (preferredModel && models.includes(preferredModel)) {
+            modelSelect.value = preferredModel;
+          } else if (current?.selectedModel && models.includes(current.selectedModel)) {
+            modelSelect.value = current.selectedModel;
+          } else {
+            modelSelect.value = models.find(m => m === "gemini-pro-latest") || models[0];
+          }
 
         } else if (provider === "openai") {
           const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${key}` } });
@@ -1778,8 +1778,9 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const chosen = preferredModel || current?.selectedModel;
-          const target = (chosen && models.includes(chosen)) ? chosen : models[0];
+          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal : 
+                         (preferredModel && models.includes(preferredModel)) ? preferredModel : 
+                         (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "claude") {
@@ -1795,8 +1796,9 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const chosen = preferredModel || current?.selectedModel;
-          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0]);
+          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal : 
+                         (preferredModel && models.includes(preferredModel)) ? preferredModel : 
+                         (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : (models.find(m => m.includes("fable-5.1")) || models[0]);
           if (target) modelSelect.value = target;
 
         } else if (provider === "openrouter") {
@@ -1848,14 +1850,13 @@
             modelSelect.appendChild(optgroup);
           });
 
-          const chosen = preferredModel || current?.selectedModel;
-          const defaultTarget = 
-            (chosen && data.data.find(m => m.id === chosen)?.id) ||
-            data.data.find(m => m.id.includes("deepseek-v4") || m.id.includes("deepseek-r1") || m.id.includes("deepseek-chat"))?.id ||
-            data.data.find(m => m.id.includes("qwen") || m.id.includes("llama"))?.id ||
-            modelSelect.querySelector("option")?.value;
+          const target = (existingDomVal && data.data.find(m => m.id === existingDomVal)) ? existingDomVal :
+                         (preferredModel && data.data.find(m => m.id === preferredModel)) ? preferredModel :
+                         (current?.selectedModel && data.data.find(m => m.id === current.selectedModel)) ? current.selectedModel :
+                         data.data.find(m => m.id.includes("deepseek-v4") || m.id.includes("deepseek-r1") || m.id.includes("deepseek-chat"))?.id ||
+                         modelSelect.querySelector("option")?.value;
 
-          if (defaultTarget) modelSelect.value = defaultTarget;
+          if (target) modelSelect.value = target;
 
         } else if (provider === "groq") {
           const res = await fetch("https://api.groq.com/openai/v1/models", {
@@ -1876,8 +1877,9 @@
             modelSelect.appendChild(opt);
           });
 
-          const chosen = preferredModel || current?.selectedModel;
-          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m.includes("llama-3.3-70b")) || models[0]);
+          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal :
+                         (preferredModel && models.includes(preferredModel)) ? preferredModel :
+                         (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : (models.find(m => m.includes("llama-3.3-70b")) || models[0]);
           if (target) modelSelect.value = target;
         }
 
@@ -2017,7 +2019,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const currentFilesContext = JSON.stringify(current.files, null, 2);
       const systemPrompt = getModeSystemPrompt(customRules, currentFilesContext);
 
-      appendChat("assistant", `🤖 Agent working in [${activeMode.toUpperCase()}]...`);
+      appendChat("assistant", `🤖 Agent working on [${model}]...`);
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
 
@@ -2048,38 +2050,16 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   data.error.code === 503 || 
                   data.error.code === 429 || 
                   data.error.message?.includes("high demand") || 
-                  data.error.message?.includes("Quota exceeded") ||
-                  data.error.message?.includes("no longer available")
+                  data.error.message?.includes("Quota exceeded")
                 ));
 
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  const modelOptions = Array.from(document.getElementById("model-select").options)
-                    .map(o => o.value)
-                    .filter(m => !m.includes("2.5") && !m.includes("2.0") && !m.includes("1.5") && !m.includes("gemma"));
-
-                  let upgradeCandidate = null;
-                  if (model.includes("flash")) {
-                    upgradeCandidate = modelOptions.find(m => m === "gemini-pro-latest" && m !== model) ||
-                                       modelOptions.find(m => m.includes("3.1-pro") && m !== model);
-                  } else {
-                    upgradeCandidate = modelOptions.find(m => m.includes("3-flash") && m !== model);
-                  }
-
-                  if (upgradeCandidate && upgradeCandidate !== model) {
-                    loadingMsg.innerText = `⚠️ ${model} busy. Trying ${upgradeCandidate}...`;
-                    model = upgradeCandidate;
-                    document.getElementById("model-select").value = upgradeCandidate;
-                    current.selectedModel = upgradeCandidate;
-                    saveSessions();
-                    await new Promise(r => setTimeout(r, 1500));
-                    continue;
-                  } else {
-                    loadingMsg.innerText = `⚠️ ${model} busy. Retrying in 2.5s... (${retries} left)`;
-                    await new Promise(r => setTimeout(r, 2500));
-                    continue;
-                  }
+                  // RETRY ON THE SAME MODEL: Do not overwrite the dropdown!
+                  loadingMsg.innerText = `⚠️ Google servers busy. Retrying with ${model} in 3s... (${retries} left)`;
+                  await new Promise(r => setTimeout(r, 3000));
+                  continue;
                 }
               }
 
@@ -2166,7 +2146,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
         clearTimeout(timeoutId);
         clearAttachedImage();
-        loadingMsg.innerText = reply;
+        loadingMsg.innerHTML = formatChatText(reply);
         current.messages.push({ role: "assistant", text: reply });
 
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
@@ -2176,7 +2156,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Autonomous Tool Runner with Workspace Persistence & Fail-Fast Loop Guards
+        // Autonomous Tool Runner with Auto-Save and Observation Loop
         let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
@@ -2202,7 +2182,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
                 if (!inferredName.includes(".")) inferredName += ".txt";
                 
-                // Write and activate in files tree
                 current.files[inferredName] = content;
                 activeFileName = inferredName;
                 saveSessions();
@@ -2293,18 +2272,48 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       }
     }
 
-    function appendChat(role, text, img) {
+    // Safe Link Formatter: Cleans raw text, fixes broken bolding, and makes links clickable
+    function formatChatText(text) {
+      if (!text) return "";
+      
+      // 1. Clean bold wrappers around links: **[url](url)** or **url**
+      let cleaned = text.replace(/\*\*(\[.*?\]\(.*?\))\*\*/g, '$1');
+
+      // 2. Escape basic entities
+      let safe = cleaned
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      // 3. Render markdown links [label](url) cleanly
+      safe = safe.replace(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#818cf8; text-decoration:underline; font-weight:bold;">$1</a>');
+
+      // 4. Auto-link plain URLs without bricking existing hrefs
+      safe = safe.replace(/(^|[^">])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:#818cf8; text-decoration:underline;">$2</a>');
+
+      return safe;
+    }
+
+    function appendChat(role, text, img, shouldScroll = true) {
       const history = document.getElementById("chat-history");
       const msg = document.createElement("div");
       msg.className = `msg ${role}`;
-      msg.innerText = text;
+      
+      if (role === "assistant" || role === "system-agent") {
+        msg.innerHTML = formatChatText(text);
+      } else {
+        msg.innerText = text;
+      }
+
       if (img) {
         const im = document.createElement("img");
         im.src = img;
         msg.appendChild(im);
       }
       history.appendChild(msg);
-      history.scrollTop = history.scrollHeight;
+      if (shouldScroll) {
+        history.scrollTop = history.scrollHeight;
+      }
     }
 
     loadRules();
