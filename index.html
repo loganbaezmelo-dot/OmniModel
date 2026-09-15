@@ -725,25 +725,44 @@
     }
 
     async function agentWebSearch(query) {
-      try {
-        const encoded = encodeURIComponent(query);
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encoded}`)}`;
-        const res = await fetch(proxyUrl);
-        const data = await res.json();
-        const doc = new DOMParser().parseFromString(data.contents, "text/html");
-        const results = [];
-        doc.querySelectorAll(".result__body").forEach((el, idx) => {
-          if (idx < 5) {
-            const title = el.querySelector(".result__title")?.innerText?.trim() || "";
-            const snippet = el.querySelector(".result__snippet")?.innerText?.trim() || "";
-            const rawLink = el.querySelector(".result__url")?.getAttribute("href") || "";
-            if (title) results.push(`• ${title} (${rawLink}): ${snippet}`);
+      const proxies = [
+        q => `https://api.allorigins.win/get?url=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
+        q => `https://corsproxy.io/?${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`,
+        q => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`)}`
+      ];
+
+      for (let proxyFn of proxies) {
+        try {
+          const res = await fetch(proxyFn(query));
+          if (!res.ok) continue;
+          
+          let rawHtml = "";
+          const contentType = res.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const json = await res.json();
+            rawHtml = json.contents || "";
+          } else {
+            rawHtml = await res.text();
           }
-        });
-        return results.length ? results.join("\n") : "No direct web results found.";
-      } catch (e) {
-        return `Web search failed: ${e.message}`;
+
+          if (!rawHtml) continue;
+          const doc = new DOMParser().parseFromString(rawHtml, "text/html");
+          const results = [];
+          doc.querySelectorAll(".result__body").forEach((el, idx) => {
+            if (idx < 5) {
+              const title = el.querySelector(".result__title")?.innerText?.trim() || "";
+              const snippet = el.querySelector(".result__snippet")?.innerText?.trim() || "";
+              const rawLink = el.querySelector(".result__url")?.getAttribute("href") || "";
+              if (title) results.push(`• ${title} (${rawLink}): ${snippet}`);
+            }
+          });
+          if (results.length) return results.join("\n");
+        } catch (e) {
+          continue;
+        }
       }
+
+      return "No direct web results found or public search proxies throttled.";
     }
 
     async function agentHttpRequest(method, url, headers = {}, body = null) {
@@ -1286,8 +1305,9 @@
 
     function onUserChangeModel() {
       const current = getActiveSession();
-      if (current) {
-        current.selectedModel = document.getElementById("model-select").value;
+      const val = document.getElementById("model-select").value;
+      if (current && val) {
+        current.selectedModel = val;
         saveSessions();
       }
     }
@@ -1677,7 +1697,6 @@
             }
           });
 
-          // Strictly enforce gemini-pro-latest as premier model
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -1690,7 +1709,8 @@
             modelSelect.appendChild(opt);
           });
 
-          const target = preferredModel || models.find(m => m === "gemini-pro-latest") || models[0];
+          const chosen = preferredModel || current?.selectedModel;
+          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m === "gemini-pro-latest") || models[0]);
           if (target) modelSelect.value = target;
 
         } else if (provider === "openai") {
@@ -1706,7 +1726,8 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = preferredModel || models[0];
+          const chosen = preferredModel || current?.selectedModel;
+          const target = (chosen && models.includes(chosen)) ? chosen : models[0];
           if (target) modelSelect.value = target;
 
         } else if (provider === "claude") {
@@ -1722,7 +1743,8 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = preferredModel || models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0];
+          const chosen = preferredModel || current?.selectedModel;
+          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m.includes("fable-5.1")) || models.find(m => m.includes("sonnet")) || models[0]);
           if (target) modelSelect.value = target;
 
         } else if (provider === "openrouter") {
@@ -1774,8 +1796,9 @@
             modelSelect.appendChild(optgroup);
           });
 
+          const chosen = preferredModel || current?.selectedModel;
           const defaultTarget = 
-            preferredModel ||
+            (chosen && data.data.find(m => m.id === chosen)?.id) ||
             data.data.find(m => m.id.includes("deepseek-v4") || m.id.includes("deepseek-r1") || m.id.includes("deepseek-chat"))?.id ||
             data.data.find(m => m.id.includes("qwen") || m.id.includes("llama"))?.id ||
             modelSelect.querySelector("option")?.value;
@@ -1801,11 +1824,12 @@
             modelSelect.appendChild(opt);
           });
 
-          const target = preferredModel || models.find(m => m.includes("llama-3.3-70b")) || models[0];
+          const chosen = preferredModel || current?.selectedModel;
+          const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m.includes("llama-3.3-70b")) || models[0]);
           if (target) modelSelect.value = target;
         }
 
-        if (current) {
+        if (current && modelSelect.value) {
           current.selectedModel = modelSelect.value;
           current.selectedProvider = provider;
           saveSessions();
@@ -1914,8 +1938,11 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const prompt = promptInput.value.trim();
       const key = document.getElementById("api-key-input").value.trim();
       const provider = document.getElementById("provider-select").value;
-      let model = document.getElementById("model-select").value;
+      
+      // STRICT MODEL LOCK: Always take directly from current model select or active session without mutating
       const current = getActiveSession();
+      const model = document.getElementById("model-select").value || current?.selectedModel;
+      
       const customRules = localStorage.getItem("omni_cursorrules") || "";
       const statusText = document.getElementById("status-text");
       const statusDot = document.getElementById("status-indicator");
@@ -1965,20 +1992,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               });
               const data = await res.json();
 
-              const isOverloaded = res.status === 503 || (data.error && (data.error.code === 503 || data.error.message?.includes("high demand")));
+              const isOverloaded = res.status === 503 || res.status === 429 || (data.error && (data.error.code === 503 || data.error.code === 429 || data.error.message?.includes("high demand")));
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  const modelOptions = Array.from(document.getElementById("model-select").options).map(o => o.value);
-                  const fallbackModel = modelOptions.find(m => m.includes("pro") && m !== model) || modelOptions.find(m => m.includes("flash"));
-                  if (fallbackModel) {
-                    loadingMsg.innerText = `⚠️ ${model} busy. Auto-fallback to ${fallbackModel}...`;
-                    model = fallbackModel;
-                    document.getElementById("model-select").value = fallbackModel;
-                  } else {
-                    loadingMsg.innerText = `⚠️ Google servers busy (503). Retrying in 2.5s... (${retries} left)`;
-                    await new Promise(r => setTimeout(r, 2500));
-                  }
+                  loadingMsg.innerText = `⚠️ ${model} busy/rate-limited. Retrying with ${model} in 3s... (${retries} left)`;
+                  await new Promise(r => setTimeout(r, 3000));
                   continue;
                 }
               }
@@ -2146,7 +2165,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Autonomous Follow-Up Trigger
+        // Autonomous Follow-Up Trigger (Without switching models)
         if (autoFollowUpPrompt) {
           promptInput.value = autoFollowUpPrompt;
           setTimeout(() => sendMessage(), 600);
