@@ -686,13 +686,26 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // 4-Tier Public Proxy Cascade with direct text parser
+    // Direct Browser Fetch First, then 3 Fallback Gateways
     async function agentWebFetch(targetUrl) {
+      // 1. Always attempt a direct fetch first
+      try {
+        const directRes = await fetch(targetUrl, { mode: 'cors' });
+        if (directRes.ok) {
+          const rawText = await directRes.text();
+          if (rawText && rawText.trim().length > 5) {
+            return cleanWebContent(rawText);
+          }
+        }
+      } catch (directErr) {
+        // Falls through to fallback if CORS blocks it
+      }
+
+      // 2. Fallback to native Vercel proxy or clean gateways
       const proxies = [
-        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        url => `/api/proxy?url=${encodeURIComponent(url)}`,
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-        url => `https://proxy.corsfix.com/?${url}`
+        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
       ];
 
       for (let proxyFn of proxies) {
@@ -702,7 +715,6 @@
 
           let raw = "";
           const contentType = res.headers.get("content-type") || "";
-
           if (contentType.includes("application/json")) {
             const json = await res.json();
             raw = json.contents || JSON.stringify(json);
@@ -710,25 +722,25 @@
             raw = await res.text();
           }
 
-          if (!raw || raw.trim().length < 5) continue;
-
-          if (!raw.includes("<html") && !raw.includes("<!DOCTYPE") && (raw.includes("#") || raw.includes("\n"))) {
-            return raw.slice(0, 4500);
-          }
-
-          const doc = new DOMParser().parseFromString(raw, "text/html");
-          doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
-          const text = doc.body?.innerText || doc.body?.textContent || raw;
-
-          if (text && text.trim().length > 10) {
-            return text.replace(/\s+/g, " ").slice(0, 4500);
+          if (raw && raw.trim().length > 5) {
+            return cleanWebContent(raw);
           }
         } catch (err) {
           continue;
         }
       }
 
-      return `Failed to fetch URL: Target unreachable via all public CORS gateways.`;
+      return `Failed to fetch URL: Target blocked direct browser access and public proxies.`;
+    }
+
+    function cleanWebContent(raw) {
+      if (!raw.includes("<html") && !raw.includes("<!DOCTYPE")) {
+        return raw.slice(0, 4500);
+      }
+      const doc = new DOMParser().parseFromString(raw, "text/html");
+      doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
+      const text = doc.body?.innerText || doc.body?.textContent || raw;
+      return text.replace(/\s+/g, " ").slice(0, 4500);
     }
 
     async function agentWebSearch(query) {
@@ -1713,10 +1725,9 @@
             }
           });
 
-          // Filter out deprecated versions
+          // Ban all deprecated 2.x and 1.x models
           models = models.filter(m => !m.includes("2.5") && !m.includes("1.5") && !m.includes("2.0"));
 
-          // Always ensure gemini-pro-latest is present
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -1729,7 +1740,6 @@
             modelSelect.appendChild(opt);
           });
 
-          // Strictly default to gemini-pro-latest unless previously specified
           const chosen = preferredModel || current?.selectedModel;
           const target = (chosen && models.includes(chosen)) ? chosen : (models.find(m => m === "gemini-pro-latest") || models[0]);
           if (target) modelSelect.value = target;
@@ -1877,7 +1887,7 @@ AVAILABLE TOOL ACTIONS:
 {"action": "web_search", "query": "search query here"}
 \`\`\`
 
-3. Web Page / Documentation Fetch (CORS proxy reader):
+3. Web Page / Documentation Fetch:
 \`\`\`tool_call
 {"action": "web_fetch", "url": "https://example.com/file.md"}
 \`\`\`
@@ -2024,12 +2034,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  // Ban 2.x and 1.x legacy models from fallback candidates
                   const modelOptions = Array.from(document.getElementById("model-select").options)
                     .map(o => o.value)
                     .filter(m => !m.includes("2.5") && !m.includes("2.0") && !m.includes("1.5"));
 
-                  // Upgrade path strictly without downgrading
                   let upgradeCandidate = null;
                   if (model.includes("flash")) {
                     upgradeCandidate = modelOptions.find(m => m === "gemini-pro-latest" && m !== model) ||
@@ -2039,7 +2047,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   }
 
                   if (upgradeCandidate && upgradeCandidate !== model) {
-                    loadingMsg.innerText = `⚠️ ${model} busy/exhausted. Upgrading to ${upgradeCandidate}...`;
+                    loadingMsg.innerText = `⚠️ ${model} busy. Trying ${upgradeCandidate}...`;
                     model = upgradeCandidate;
                     document.getElementById("model-select").value = upgradeCandidate;
                     current.selectedModel = upgradeCandidate;
@@ -2140,7 +2148,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        // Multi-Step Plan Render
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
         if (planMatch && planMatch[1]) {
           try {
@@ -2148,7 +2155,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Autonomous Tool Runner with Observation Loop
         let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
@@ -2184,7 +2190,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           }
         }
 
-        // File Update Parser
         const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
         let matched;
         let codeUpdated = false;
@@ -2217,7 +2222,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Autonomous Follow-Up Trigger (Carrying strict model selection forward)
         if (autoFollowUpPrompt) {
           promptInput.value = autoFollowUpPrompt;
           setTimeout(() => sendMessage(), 600);
