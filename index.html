@@ -686,9 +686,8 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // Direct Browser Fetch First, then 3 Fallback Gateways
+    // Direct Browser Fetch First, then 3 Fallback Gateways (No arbitrary cutoffs)
     async function agentWebFetch(targetUrl) {
-      // 1. Always attempt a direct fetch first
       try {
         const directRes = await fetch(targetUrl, { mode: 'cors' });
         if (directRes.ok) {
@@ -697,11 +696,8 @@
             return cleanWebContent(rawText);
           }
         }
-      } catch (directErr) {
-        // Falls through to fallback if CORS blocks it
-      }
+      } catch (directErr) {}
 
-      // 2. Fallback to native Vercel proxy or clean gateways
       const proxies = [
         url => `/api/proxy?url=${encodeURIComponent(url)}`,
         url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
@@ -735,12 +731,12 @@
 
     function cleanWebContent(raw) {
       if (!raw.includes("<html") && !raw.includes("<!DOCTYPE")) {
-        return raw.slice(0, 4500);
+        return raw; // Preserve whole markdown / json / text without cutting off
       }
       const doc = new DOMParser().parseFromString(raw, "text/html");
       doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
       const text = doc.body?.innerText || doc.body?.textContent || raw;
-      return text.replace(/\s+/g, " ").slice(0, 4500);
+      return text.replace(/\r\n/g, "\n");
     }
 
     async function agentWebSearch(query) {
@@ -804,7 +800,7 @@
         }
         const res = await fetch(url, opts);
         const text = await res.text();
-        return `Status ${res.status}: ${text.slice(0, 1000)}`;
+        return `Status ${res.status}: ${text.slice(0, 2000)}`;
       } catch (err) {
         return `HTTP Request failed: ${err.message}`;
       }
@@ -1720,14 +1716,20 @@
           if (data.error) throw new Error(data.error.message);
           
           data.models.forEach(m => {
-            if (m.supportedGenerationMethods?.includes("generateContent")) {
-              models.push(m.name.replace("models/", ""));
+            const name = m.name.replace("models/", "");
+            // Filter out non-agent Gemma and sunset legacy checkpoints completely
+            if (
+              m.supportedGenerationMethods?.includes("generateContent") &&
+              !name.includes("gemma") &&
+              !name.includes("2.5") &&
+              !name.includes("1.5") &&
+              !name.includes("2.0")
+            ) {
+              models.push(name);
             }
           });
 
-          // Ban all deprecated 2.x and 1.x models
-          models = models.filter(m => !m.includes("2.5") && !m.includes("1.5") && !m.includes("2.0"));
-
+          // Always pin gemini-pro-latest
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -2036,7 +2038,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   retries--;
                   const modelOptions = Array.from(document.getElementById("model-select").options)
                     .map(o => o.value)
-                    .filter(m => !m.includes("2.5") && !m.includes("2.0") && !m.includes("1.5"));
+                    .filter(m => !m.includes("2.5") && !m.includes("2.0") && !m.includes("1.5") && !m.includes("gemma"));
 
                   let upgradeCandidate = null;
                   if (model.includes("flash")) {
@@ -2155,6 +2157,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
+        // Autonomous Tool Runner with Observation Loop & HARDCODED WORKSPACE PERSISTENCE
         let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
@@ -2175,9 +2178,24 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             } else if (tool.action === "web_fetch" && tool.url) {
               appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
               const content = await agentWebFetch(tool.url);
-              appendChat("system-agent", `📄 Extracted Content:\n${content.slice(0, 600)}...`);
+              
+              // HARDCODED FALLBACK PERSISTENCE: Save file straight to workspace files so it's never lost
               if (!content.startsWith("Failed to fetch")) {
-                autoFollowUpPrompt = `[Document Content from ${tool.url}]:\n${content}\n\nRead these instructions carefully and proceed autonomously with the next step.`;
+                let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
+                if (!inferredName.includes(".")) inferredName += ".txt";
+                
+                // Directly write and activate in files tree
+                current.files[inferredName] = content;
+                activeFileName = inferredName;
+                saveSessions();
+                renderFileTree();
+                loadFileEditor();
+                renderSandboxPreview();
+
+                appendChat("system-agent", `💾 Auto-Saved full document directly to workspace: "${inferredName}" (${content.length} bytes)`);
+                autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously with the next step.`;
+              } else {
+                appendChat("system-agent", `⚠️ Fetch notice: ${content}`);
               }
             } else if (tool.action === "http_request" && tool.url) {
               appendChat("system-agent", `📡 HTTP ${tool.method || "GET"}: ${tool.url}...`);
