@@ -14,6 +14,7 @@
       --muted: #9ca3af;
       --danger: #ef4444;
       --success: #10b981;
+      --warning: #f59e0b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -368,7 +369,7 @@
     #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 99; display: none; }
     #sidebar-overlay.open { display: block; }
     #sidebar {
-      position: fixed; top: 0; bottom: 0; left: 0; width: 320px;
+      position: fixed; top: 0; bottom: 0; left: 0; width: 330px;
       background: var(--card); border-right: 1px solid var(--border);
       z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease;
       display: flex; flex-direction: column;
@@ -387,6 +388,16 @@
     
     .sidebar-section { padding: 12px; border-top: 1px solid var(--border); background: #151821; display: flex; flex-direction: column; gap: 6px; }
     .sidebar-section h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+    
+    .schedule-item {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 8px; background: #1c212e; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 11px;
+    }
+    .schedule-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #a5b4fc; }
+    .schedule-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .schedule-actions button { padding: 2px 6px; font-size: 10px; }
+
     .gh-inputs { display: flex; flex-direction: column; gap: 6px; }
     .gh-inputs input { font-size: 12px; padding: 6px 10px; }
     .gh-btns { display: flex; gap: 6px; }
@@ -427,6 +438,18 @@
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
 
+    <!-- Active Schedules Section -->
+    <div class="sidebar-section" id="sidebar-schedules-section">
+      <h4>In-Tab Agent Schedules <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="promptNewSchedule()">+ Task</button></h4>
+      <div id="sidebar-schedules-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Long-term Memory Vault Inspector in Sidebar -->
+    <div class="sidebar-section" id="sidebar-memory-section">
+      <h4>Long-Term Memory Vault <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearLongTermMemory()">Clear</button></h4>
+      <div id="sidebar-memory-preview" style="font-family:monospace; font-size:11px; color:var(--muted); max-height:90px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></div>
+    </div>
+
     <div class="sidebar-section" id="sidebar-gh-section">
       <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
@@ -438,12 +461,6 @@
         <button class="icon-btn" onclick="pullFromGitHub()">⬇ Pull</button>
         <button class="github-btn" onclick="pushToGitHub()">⬆ Commit & Push</button>
       </div>
-    </div>
-
-    <!-- Long-term Memory Vault Inspector in Sidebar -->
-    <div class="sidebar-section" id="sidebar-memory-section">
-      <h4>Long-Term Memory Vault <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearLongTermMemory()">Clear</button></h4>
-      <div id="sidebar-memory-preview" style="font-family:monospace; font-size:11px; color:var(--muted); max-height:90px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></div>
     </div>
     
     <div class="sidebar-section">
@@ -720,6 +737,126 @@
       box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
+    // --- AUTONOMOUS IN-TAB SCHEDULER ENGINE ---
+    let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
+
+    function saveSchedules() {
+      localStorage.setItem("omni_agent_schedules", JSON.stringify(agentSchedules));
+      renderSchedulesList();
+    }
+
+    function setAgentSchedule(id, intervalMinutes, prompt) {
+      intervalMinutes = Math.max(1, parseInt(intervalMinutes) || 30);
+      const existingIdx = agentSchedules.findIndex(s => s.id === id);
+      const scheduleObj = {
+        id,
+        intervalMinutes,
+        prompt,
+        lastRun: Date.now(),
+        nextRun: Date.now() + (intervalMinutes * 60 * 1000),
+        enabled: true
+      };
+
+      if (existingIdx !== -1) {
+        agentSchedules[existingIdx] = scheduleObj;
+      } else {
+        agentSchedules.push(scheduleObj);
+      }
+      saveSchedules();
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      return true;
+    }
+
+    function removeAgentSchedule(id) {
+      agentSchedules = agentSchedules.filter(s => s.id !== id);
+      saveSchedules();
+    }
+
+    function toggleScheduleEnabled(id) {
+      const item = agentSchedules.find(s => s.id === id);
+      if (item) {
+        item.enabled = !item.enabled;
+        if (item.enabled) item.nextRun = Date.now() + (item.intervalMinutes * 60 * 1000);
+        saveSchedules();
+      }
+    }
+
+    function promptNewSchedule() {
+      const id = window.prompt("Schedule ID/Name:", "aibook_heartbeat");
+      if (!id) return;
+      const mins = window.prompt("Run Interval in minutes:", "30");
+      if (!mins) return;
+      const prompt = window.prompt("Prompt to execute:", "Run the heartbeat.md routine and broadcast status if needed.");
+      if (!prompt) return;
+      setAgentSchedule(id, mins, prompt);
+    }
+
+    function renderSchedulesList() {
+      const container = document.getElementById("sidebar-schedules-list");
+      if (!container) return;
+      container.innerHTML = "";
+      if (!agentSchedules.length) {
+        container.innerHTML = `<span style="font-size:11px; color:var(--muted); font-family:monospace;">(No active scheduled routines)</span>`;
+        return;
+      }
+
+      agentSchedules.forEach(sc => {
+        const item = document.createElement("div");
+        item.className = "schedule-item";
+
+        const remainingMs = sc.nextRun - Date.now();
+        const minsLeft = Math.max(0, Math.round(remainingMs / 60000));
+
+        item.innerHTML = `
+          <div class="schedule-head">
+            <span>${sc.id} (${sc.intervalMinutes}m)</span>
+            <span style="color:${sc.enabled ? 'var(--success)' : 'var(--danger)'};">${sc.enabled ? `${minsLeft}m left` : 'Paused'}</span>
+          </div>
+          <div style="color:var(--muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${sc.prompt}
+          </div>
+          <div class="schedule-actions">
+            <button class="icon-btn" onclick="triggerScheduleNow('${sc.id}')">▶ Run</button>
+            <button class="icon-btn" onclick="toggleScheduleEnabled('${sc.id}')">${sc.enabled ? '⏸ Pause' : '▶ Enable'}</button>
+            <button class="icon-btn" style="color:var(--danger);" onclick="removeAgentSchedule('${sc.id}')">✕</button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function triggerScheduleNow(id) {
+      const sc = agentSchedules.find(s => s.id === id);
+      if (!sc) return;
+      sc.lastRun = Date.now();
+      sc.nextRun = Date.now() + (sc.intervalMinutes * 60 * 1000);
+      saveSchedules();
+
+      appendChat("system-agent", `⏰ [SCHEDULE TRIGGER]: Executing routine "${sc.id}"...`);
+      document.getElementById("prompt-input").value = sc.prompt;
+      switchTab("chat");
+      sendMessage();
+    }
+
+    // Background In-Tab Schedule Ticker (Runs every 10 seconds)
+    setInterval(() => {
+      const now = Date.now();
+      let updated = false;
+
+      agentSchedules.forEach(sc => {
+        if (sc.enabled && now >= sc.nextRun) {
+          if (!isGenerating && !isAutoLooping) {
+            triggerScheduleNow(sc.id);
+            updated = true;
+          }
+        }
+      });
+
+      if (!updated && agentSchedules.length) {
+        renderSchedulesList();
+      }
+    }, 10000);
+
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
       const text = document.getElementById("status-text");
@@ -927,6 +1064,7 @@
       document.getElementById("libs-header-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("sidebar-gh-section").style.display = isWebDev ? "flex" : "none";
       document.getElementById("sidebar-memory-section").style.display = isGeneral ? "flex" : "none";
+      document.getElementById("sidebar-schedules-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("inspect-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("console-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
 
@@ -937,6 +1075,7 @@
       else promptInput.placeholder = "Search web, fetch URLs, read skill.md, or run APIs...";
 
       renderMemoryPreview();
+      renderSchedulesList();
     }
 
     function toggleLibsModal(open) {
@@ -1341,6 +1480,7 @@
       document.getElementById("sidebar").classList.toggle("open");
       document.getElementById("sidebar-overlay").classList.toggle("open");
       renderMemoryPreview();
+      renderSchedulesList();
     }
 
     function renderSidebar() {
@@ -2009,6 +2149,11 @@ AVAILABLE TOOL ACTIONS:
 Or copy an entire file directly to long-term memory:
 \`\`\`tool_call
 {"action": "save_to_longterm_memory", "from_file": "notes.txt"}
+\`\`\`
+
+8. Set Autonomous Recurring In-Tab Schedule:
+\`\`\`tool_call
+{"action": "set_schedule", "id": "aibook_heartbeat", "intervalMinutes": 30, "prompt": "Read heartbeat.md and check feed for actions."}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -2042,18 +2187,22 @@ B,20
 
       if (activeMode === "general") {
         const longTermMem = JSON.stringify(getLongTermMemory(), null, 2);
-        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, and Persistent Long-Term Memory across all chats.
+        const schedulesContext = JSON.stringify(agentSchedules, null, 2);
+        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, Persistent Long-Term Memory, and In-Tab Scheduling.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 Files:
 ${currentFilesContext}
 
-[GLOBAL LONG-TERM MEMORY VAULT (Persists across all general chats)]:
+[GLOBAL LONG-TERM MEMORY VAULT]:
 ${longTermMem}
+
+[ACTIVE IN-TAB RECURRING SCHEDULES]:
+${schedulesContext}
 
 ${commonTools}
 
-If you learn critical information (like Agent Keys, API keys, credentials, or specs) that should be remembered forever across every new chat session, use the 'save_to_longterm_memory' tool!
+If instructed to execute routine jobs (e.g. heartbeat routines every X minutes), register a recurring schedule using the 'set_schedule' tool action!
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
 
@@ -2064,13 +2213,13 @@ All Available Files:
 ${currentFilesContext}
 ${commonTools}
 
-8. Autonomous CDN Injection:
+9. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-9. Code Updates:
+10. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2255,6 +2404,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+            } else if (tool.action === "set_schedule" && tool.id) {
+              setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
             } else if (tool.action === "save_to_longterm_memory") {
               let memContent = tool.content;
               let memKey = tool.key || "memory_" + Date.now();
@@ -2340,6 +2491,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
+        // Continuous Loop Runner: Pauses for 2.5s between steps to prevent 20 RPM Google quota spikes
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           setLoopUI(true);
           promptInput.value = autoFollowUpPrompt;
@@ -2347,7 +2499,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (isAutoLooping) {
               sendMessage();
             }
-          }, 1200);
+          }, 2500);
         } else {
           setLoopUI(false);
         }
