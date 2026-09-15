@@ -450,6 +450,15 @@
       <div id="sidebar-memory-preview" style="font-family:monospace; font-size:11px; color:var(--muted); max-height:90px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></div>
     </div>
 
+    <!-- User & Vercel KV Cloud Cron Section -->
+    <div class="sidebar-section" id="sidebar-kv-section">
+      <h4>Cloud Serverless Cron <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="syncUserToVercelKV()">☁️ Sync KV</button></h4>
+      <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; font-family:monospace; color:var(--muted);">
+        <span>User ID: <strong id="kv-user-id" style="color:#a5b4fc;">...</strong></span>
+        <span>Sync Status: <strong id="kv-sync-status" style="color:var(--text);">Not Synced</strong></span>
+      </div>
+    </div>
+
     <div class="sidebar-section" id="sidebar-gh-section">
       <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
@@ -701,6 +710,62 @@
     let isGenerating = false;
     let activeAbortController = null;
     let isAutoLooping = false;
+
+    // --- USER IDENTIFICATION & VERCEL KV CRON SYNC ---
+    function getOrInitUserId() {
+      let uid = localStorage.getItem("omni_user_id");
+      if (!uid) {
+        uid = "usr_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        localStorage.setItem("omni_user_id", uid);
+      }
+      return uid;
+    }
+
+    async function syncUserToVercelKV() {
+      const userId = getOrInitUserId();
+      const current = getActiveSession();
+      const notes = current?.files["notes.txt"] || "";
+      const statusEl = document.getElementById("kv-sync-status");
+
+      // Extract agent credentials from notes.txt
+      const keyMatch = notes.match(/Agent Key:\s*([a-zA-Z0-9_-]+)/);
+      const aibookKey = keyMatch ? keyMatch[1] : null;
+      const apiKey = document.getElementById("api-key-input").value.trim();
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
+
+      if (statusEl) statusEl.innerText = "Syncing...";
+
+      try {
+        const res = await fetch("/api/user_sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            aibookKey,
+            apiKey,
+            model,
+            active: true,
+            schedulePrompt: "Run heartbeat.md, solve challenge if needed, and broadcast status."
+          })
+        });
+
+        if (res.ok) {
+          if (statusEl) {
+            statusEl.innerText = "Synced (Active)";
+            statusEl.style.color = "var(--success)";
+          }
+          appendChat("system-agent", `☁️ Cloud Cron Synced: User [${userId}] registered in Vercel KV. Server runs every 30m!`);
+        } else {
+          throw new Error("API returned status " + res.status);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerText = "Sync Failed";
+          statusEl.style.color = "var(--danger)";
+        }
+        console.warn("KV sync note:", err);
+      }
+    }
 
     // --- LONG-TERM MEMORY VAULT ---
     function getLongTermMemory() {
@@ -1064,6 +1129,7 @@
       document.getElementById("sidebar-gh-section").style.display = isWebDev ? "flex" : "none";
       document.getElementById("sidebar-memory-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("sidebar-schedules-section").style.display = isGeneral ? "flex" : "none";
+      document.getElementById("sidebar-kv-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("inspect-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("console-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
 
@@ -1073,6 +1139,7 @@
       else if (isWebDev) promptInput.placeholder = "Prompt AI to code, inspect, inject CDNs, or fix...";
       else promptInput.placeholder = "Search web, fetch URLs, read skill.md, or run APIs...";
 
+      document.getElementById("kv-user-id").innerText = getOrInitUserId();
       renderMemoryPreview();
       renderSchedulesList();
     }
@@ -2489,6 +2556,11 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         saveSessions();
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
+
+        // Auto sync user credentials to KV whenever an Agent Key is detected in notes.txt
+        if (current.files["notes.txt"] && current.files["notes.txt"].includes("Agent Key:")) {
+          syncUserToVercelKV();
+        }
 
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           setLoopUI(true);
