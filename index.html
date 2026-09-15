@@ -686,7 +686,44 @@
       text.innerText = "❌ Offline: Network dropped!";
     });
 
-    // --- Web Tools (Search, Fetch, HTTP) ---
+    // Multi-Proxy Cascade for Web Fetching
+    async function agentWebFetch(targetUrl) {
+      const proxies = [
+        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+        url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+      ];
+
+      for (let proxyFn of proxies) {
+        try {
+          const res = await fetch(proxyFn(targetUrl));
+          if (!res.ok) continue;
+
+          let rawContent = "";
+          const contentType = res.headers.get("content-type") || "";
+
+          if (contentType.includes("application/json")) {
+            const json = await res.json();
+            rawContent = json.contents || JSON.stringify(json);
+          } else {
+            rawContent = await res.text();
+          }
+
+          if (!rawContent || rawContent.length < 5) continue;
+
+          const doc = new DOMParser().parseFromString(rawContent, "text/html");
+          doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
+          const text = doc.body?.innerText || doc.body?.textContent || rawContent;
+
+          return text.replace(/\s+/g, " ").slice(0, 4500);
+        } catch (err) {
+          continue;
+        }
+      }
+
+      return `Failed to fetch URL: All proxies were unreachable or blocked by target host.`;
+    }
+
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
@@ -706,22 +743,6 @@
         return results.length ? results.join("\n") : "No direct web results found.";
       } catch (e) {
         return `Web search failed: ${e.message}`;
-      }
-    }
-
-    async function agentWebFetch(targetUrl) {
-      try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-        const res = await fetch(proxyUrl);
-        const data = await res.json();
-        if (!data.contents) throw new Error("Empty response returned");
-
-        const doc = new DOMParser().parseFromString(data.contents, "text/html");
-        doc.querySelectorAll("script, style, noscript, svg").forEach(e => e.remove());
-        const text = doc.body?.innerText || doc.body?.textContent || data.contents;
-        return text.replace(/\s+/g, " ").slice(0, 4500);
-      } catch (err) {
-        return `Failed to fetch URL: ${err.message}`;
       }
     }
 
@@ -939,7 +960,9 @@
 
         if (lastRecognizedText.length > 0) {
           voiceDispatchTimer = setTimeout(() => {
-            if (speechRecognizer) speechRecognizer.stop();
+            if (speechRecognizer) {
+              speechRecognizer.stop();
+            }
           }, 1100);
         }
       };
@@ -1220,7 +1243,7 @@
         historyIdx: 0,
         messages: [],
         selectedProvider: "gemini",
-        selectedModel: ""
+        selectedModel: "gemini-pro-latest"
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
@@ -1299,7 +1322,7 @@
       renderFileTree();
       loadFileEditor();
       renderSandboxPreview();
-      onProviderChange(current.selectedModel);
+      onProviderChange(current.selectedModel || "gemini-pro-latest");
     }
 
     function renderSandboxPreview() {
@@ -1654,7 +1677,7 @@
             }
           });
 
-          // Ensure official alias gemini-pro-latest is always top of the list
+          // Strictly enforce gemini-pro-latest as premier model
           if (!models.includes("gemini-pro-latest")) {
             models.unshift("gemini-pro-latest");
           }
@@ -1667,7 +1690,6 @@
             modelSelect.appendChild(opt);
           });
 
-          // Default strictly to gemini-pro-latest
           const target = preferredModel || models.find(m => m === "gemini-pro-latest") || models[0];
           if (target) modelSelect.value = target;
 
@@ -2047,7 +2069,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         loadingMsg.innerText = reply;
         current.messages.push({ role: "assistant", text: reply });
 
-        // Parse & Render Multi-Step Plan
+        // Multi-Step Plan Render
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
         if (planMatch && planMatch[1]) {
           try {
@@ -2055,8 +2077,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           } catch(e) {}
         }
 
-        // Execute Autonomous Tool Calls
+        // Autonomous Tool Runner with Observation Loop
+        let autoFollowUpPrompt = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
+
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
@@ -2070,21 +2094,26 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `🔍 Searching web: "${tool.query}"...`);
               const results = await agentWebSearch(tool.query);
               appendChat("system-agent", `🌐 Results:\n${results}`);
+              autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
             } else if (tool.action === "web_fetch" && tool.url) {
               appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
               const content = await agentWebFetch(tool.url);
-              appendChat("system-agent", `📄 Extracted:\n${content.slice(0, 600)}...`);
+              appendChat("system-agent", `📄 Extracted Content:\n${content.slice(0, 600)}...`);
+              if (!content.startsWith("Failed to fetch")) {
+                autoFollowUpPrompt = `[Document Content from ${tool.url}]:\n${content}\n\nRead these instructions carefully and proceed autonomously with the next step.`;
+              }
             } else if (tool.action === "http_request" && tool.url) {
               appendChat("system-agent", `📡 HTTP ${tool.method || "GET"}: ${tool.url}...`);
               const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
               appendChat("system-agent", `📬 Response:\n${resp}`);
+              autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
             }
           } catch(err) {
             console.warn("Tool parse error:", err);
           }
         }
 
-        // Parse File Patches / Artifacts
+        // File Update Parser
         const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
         let matched;
         let codeUpdated = false;
@@ -2116,6 +2145,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         saveSessions();
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
+
+        // Autonomous Follow-Up Trigger
+        if (autoFollowUpPrompt) {
+          promptInput.value = autoFollowUpPrompt;
+          setTimeout(() => sendMessage(), 600);
+        }
 
       } catch (err) {
         clearTimeout(timeoutId);
