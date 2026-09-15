@@ -384,6 +384,7 @@
     .chat-item.active { border-color: var(--accent); background: #2e3447; }
     .chat-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
     .chat-del-btn { background: none; border: none; color: var(--danger); font-size: 16px; padding: 2px 6px; cursor: pointer; }
+    
     .sidebar-section { padding: 12px; border-top: 1px solid var(--border); background: #151821; display: flex; flex-direction: column; gap: 6px; }
     .sidebar-section h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
     .gh-inputs { display: flex; flex-direction: column; gap: 6px; }
@@ -437,6 +438,12 @@
         <button class="icon-btn" onclick="pullFromGitHub()">⬇ Pull</button>
         <button class="github-btn" onclick="pushToGitHub()">⬆ Commit & Push</button>
       </div>
+    </div>
+
+    <!-- Long-term Memory Vault Inspector in Sidebar -->
+    <div class="sidebar-section" id="sidebar-memory-section">
+      <h4>Long-Term Memory Vault <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearLongTermMemory()">Clear</button></h4>
+      <div id="sidebar-memory-preview" style="font-family:monospace; font-size:11px; color:var(--muted); max-height:90px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></div>
     </div>
     
     <div class="sidebar-section">
@@ -678,6 +685,41 @@
     let activeAbortController = null;
     let isAutoLooping = false;
 
+    // --- LONG-TERM MEMORY VAULT ---
+    function getLongTermMemory() {
+      return JSON.parse(localStorage.getItem("omni_general_longterm_memory") || "{}");
+    }
+
+    function saveToLongTermMemory(key, content) {
+      const mem = getLongTermMemory();
+      mem[key] = {
+        updatedAt: new Date().toISOString(),
+        content: content
+      };
+      localStorage.setItem("omni_general_longterm_memory", JSON.stringify(mem));
+      renderMemoryPreview();
+      return true;
+    }
+
+    function clearLongTermMemory() {
+      if (confirm("Clear all global long-term memory for General Agent?")) {
+        localStorage.removeItem("omni_general_longterm_memory");
+        renderMemoryPreview();
+      }
+    }
+
+    function renderMemoryPreview() {
+      const box = document.getElementById("sidebar-memory-preview");
+      if (!box) return;
+      const mem = getLongTermMemory();
+      const keys = Object.keys(mem);
+      if (!keys.length) {
+        box.innerText = "(Memory vault is empty)";
+        return;
+      }
+      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+    }
+
     window.addEventListener("online", () => {
       const dot = document.getElementById("status-indicator");
       const text = document.getElementById("status-text");
@@ -872,6 +914,7 @@
       const isWebDev = activeMode === "webdev";
       const isWriting = activeMode === "writing";
       const isData = activeMode === "data";
+      const isGeneral = activeMode === "general";
 
       document.getElementById("mode-select").value = activeMode;
       document.getElementById("sidebar-mode-title").innerText = `${activeMode.toUpperCase()} Sessions`;
@@ -883,6 +926,7 @@
 
       document.getElementById("libs-header-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("sidebar-gh-section").style.display = isWebDev ? "flex" : "none";
+      document.getElementById("sidebar-memory-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("inspect-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("console-toggle-btn").style.display = isWebDev ? "inline-block" : "none";
 
@@ -891,6 +935,8 @@
       else if (isData) promptInput.placeholder = "Paste data, ask for chart trends, CSV summaries...";
       else if (isWebDev) promptInput.placeholder = "Prompt AI to code, inspect, inject CDNs, or fix...";
       else promptInput.placeholder = "Search web, fetch URLs, read skill.md, or run APIs...";
+
+      renderMemoryPreview();
     }
 
     function toggleLibsModal(open) {
@@ -1294,6 +1340,7 @@
     function toggleSidebar() {
       document.getElementById("sidebar").classList.toggle("open");
       document.getElementById("sidebar-overlay").classList.toggle("open");
+      renderMemoryPreview();
     }
 
     function renderSidebar() {
@@ -1953,6 +2000,15 @@ AVAILABLE TOOL ACTIONS:
 6. Explicit Goal Complete (Use this when your objective is finished):
 \`\`\`tool_call
 {"action": "finish", "message": "Objective completed successfully."}
+\`\`\`
+
+7. Save to Long-Term Memory (Persistent across ALL General Agent chats):
+\`\`\`tool_call
+{"action": "save_to_longterm_memory", "key": "aibook_agent", "content": "Agent Key: ak_..., status, protocols..."}
+\`\`\`
+Or copy an entire file directly to long-term memory:
+\`\`\`tool_call
+{"action": "save_to_longterm_memory", "from_file": "notes.txt"}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -1985,13 +2041,19 @@ B,20
       }
 
       if (activeMode === "general") {
-        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing and API capabilities.
+        const longTermMem = JSON.stringify(getLongTermMemory(), null, 2);
+        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, and Persistent Long-Term Memory across all chats.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 Files:
 ${currentFilesContext}
+
+[GLOBAL LONG-TERM MEMORY VAULT (Persists across all general chats)]:
+${longTermMem}
+
 ${commonTools}
 
+If you learn critical information (like Agent Keys, API keys, credentials, or specs) that should be remembered forever across every new chat session, use the 'save_to_longterm_memory' tool!
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
 
@@ -2002,13 +2064,13 @@ All Available Files:
 ${currentFilesContext}
 ${commonTools}
 
-7. Autonomous CDN Injection:
+8. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-8. Code Updates:
+9. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2193,6 +2255,17 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+            } else if (tool.action === "save_to_longterm_memory") {
+              let memContent = tool.content;
+              let memKey = tool.key || "memory_" + Date.now();
+              if (tool.from_file && current.files[tool.from_file]) {
+                memContent = current.files[tool.from_file];
+                memKey = tool.from_file;
+              }
+              if (memContent) {
+                saveToLongTermMemory(memKey, memContent);
+                appendChat("system-agent", `🧠 Saved "${memKey}" into Persistent Long-Term Memory Vault!`);
+              }
             } else if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
               appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
@@ -2267,7 +2340,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Continuous Loop Runner: Only stops on explicit user click (Stop button) or AI calling "finish"
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           setLoopUI(true);
           promptInput.value = autoFollowUpPrompt;
@@ -2275,7 +2347,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (isAutoLooping) {
               sendMessage();
             }
-          }, 800);
+          }, 1200);
         } else {
           setLoopUI(false);
         }
