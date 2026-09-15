@@ -782,11 +782,11 @@
     }
 
     function promptNewSchedule() {
-      const id = window.prompt("Schedule ID/Name:", "aibook_heartbeat");
+      const id = window.prompt("Schedule ID/Name:");
       if (!id) return;
-      const mins = window.prompt("Run Interval in minutes:", "30");
+      const mins = window.prompt("Run Interval in minutes:");
       if (!mins) return;
-      const prompt = window.prompt("Prompt to execute:", "Run the heartbeat.md routine and broadcast status if needed.");
+      const prompt = window.prompt("Prompt to execute:");
       if (!prompt) return;
       setAgentSchedule(id, mins, prompt);
     }
@@ -838,7 +838,6 @@
       sendMessage();
     }
 
-    // Background In-Tab Schedule Ticker (Runs every 10 seconds)
     setInterval(() => {
       const now = Date.now();
       let updated = false;
@@ -2491,7 +2490,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Continuous Loop Runner: Pauses for 2.5s between steps to prevent 20 RPM Google quota spikes
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           setLoopUI(true);
           promptInput.value = autoFollowUpPrompt;
