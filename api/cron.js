@@ -12,7 +12,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Vercel KV credentials missing" });
   }
 
-  // Helper for Upstash / Vercel KV REST execution
   async function kvCmd(...args) {
     const cmd = args[0];
     const rest = args.slice(1);
@@ -23,7 +22,7 @@ export default async function handler(req, res) {
     return d.result;
   }
 
-  // --- NATIVE AGENT TOOLS (REPLICATED FROM INDEX.HTML) ---
+  // --- NATIVE AGENT TOOLS ---
   async function agentHttpRequest(method, url, headers = {}, body = null) {
     try {
       const opts = {
@@ -132,7 +131,7 @@ AVAILABLE TOOL ACTIONS:
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
   }
 
-  // --- MULTI-PROVIDER MODEL CALL (GEMINI, OPENAI, CLAUDE, OPENROUTER, GROQ) ---
+  // --- MULTI-PROVIDER INVOCATION ---
   async function callProviderModel(provider, model, key, systemPrompt, userPrompt) {
     let retries = 2;
     while (retries >= 0) {
@@ -283,7 +282,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       intervalMinutes: Math.max(1, parseInt(tool.intervalMinutes, 10) || 30),
                       prompt: tool.prompt || "Run scheduled routine.",
                       lastRun: Date.now(),
-                      nextRun: Date.now() + ((tool.intervalMinutes || 30) * 60 * 1000),
+                      nextRun: Date.now() + ((parseInt(tool.intervalMinutes, 10) || 30) * 60 * 1000),
                       enabled: true
                     };
                     if (existingIdx !== -1) schedules[existingIdx] = scheduleObj;
@@ -338,12 +337,11 @@ Always continue executing autonomously until the final objective is fulfilled, t
             }
           }
 
+          // Keep task permanently enabled and advance execution clock
           sc.lastRun = now;
+          sc.nextRun = now + intervalMs;
+          sc.enabled = true;
           sc.lastResult = lastReply.slice(0, 300);
-
-          if (sc.id.startsWith("handoff_")) {
-            sc.enabled = false;
-          }
 
           executionResults.push({ userId, scheduleId: sc.id, hops, status: "Executed" });
         }
