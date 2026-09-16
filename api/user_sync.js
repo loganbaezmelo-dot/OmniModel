@@ -13,8 +13,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Vercel KV not configured" });
   }
 
-  async function kvCmd(command, ...args) {
-    const r = await fetch(`${kvUrl}/${command}/${args.map(encodeURIComponent).join("/")}`, {
+  async function kvCmd(...args) {
+    const cmd = args[0];
+    const rest = args.slice(1);
+    const r = await fetch(`${kvUrl}/${cmd}/${rest.map(encodeURIComponent).join("/")}`, {
       headers: { Authorization: `Bearer ${kvToken}` }
     });
     return (await r.json()).result;
@@ -25,19 +27,35 @@ export default async function handler(req, res) {
     if (typeof payload === "string") {
       try { payload = JSON.parse(payload); } catch(e) { payload = {}; }
     }
-    const { userId, apiKey, model, schedules, active } = payload || {};
+    const { 
+      userId, 
+      provider, 
+      apiKey, 
+      model, 
+      schedules, 
+      files, 
+      longterm_memory, 
+      rules, 
+      active 
+    } = payload || {};
 
     if (!userId) return res.status(400).json({ error: "userId is required" });
 
+    // Store state in KV under user record
     await kvCmd("set", `agent:user:${userId}`, JSON.stringify({
       userId,
+      provider: provider || "gemini",
       apiKey,
       model: model || "gemini-pro-latest",
       schedules: schedules || [],
+      files: files || {},
+      longterm_memory: longterm_memory || {},
+      rules: rules || "",
       active: active ?? true,
       updatedAt: new Date().toISOString()
     }));
 
+    // Register into global set of all users
     await kvCmd("sadd", "all_agent_users", userId);
     return res.status(200).json({ success: true, userId });
   }
