@@ -23,6 +23,44 @@ export default async function handler(req, res) {
   }
 
   // --- NATIVE AGENT TOOLS ---
+  async function agentGetTime(timezone = "UTC") {
+    try {
+      const now = new Date();
+      const formatted = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        dateStyle: "full",
+        timeStyle: "long"
+      }).format(now);
+      return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+    } catch (e) {
+      return `Error retrieving time for timezone "${timezone}": ${e.message}`;
+    }
+  }
+
+  async function agentGetWeather(location = "London") {
+    try {
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+      if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
+      const geoData = await geoRes.json();
+      if (!geoData.results || !geoData.results.length) {
+        return `Location "${location}" not found.`;
+      }
+      const { latitude, longitude, name, admin1, country } = geoData.results[0];
+      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+      if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
+      const wData = await weatherRes.json();
+      const cur = wData.current;
+      return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
+- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}%
+- Wind Speed: ${cur.wind_speed_10m} km/h
+- Precipitation: ${cur.precipitation} mm
+- Recorded At: ${cur.time} (${wData.timezone})`;
+    } catch (err) {
+      return `Weather fetch error: ${err.message}`;
+    }
+  }
+
   async function agentHttpRequest(method, url, headers = {}, body = null) {
     try {
       const opts = {
@@ -128,10 +166,19 @@ AVAILABLE TOOL ACTIONS:
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your recurring task prompt."}
 \`\`\`
 
+9. Get Current Time & Date:
+\`\`\`tool_call
+{"action": "get_time", "timezone": "America/New_York"}
+\`\`\`
+
+10. Get Live Weather:
+\`\`\`tool_call
+{"action": "get_weather", "location": "Miami, FL"}
+\`\`\`
+
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
   }
 
-  // --- MULTI-PROVIDER INVOCATION ---
   async function callProviderModel(provider, model, key, systemPrompt, userPrompt) {
     let retries = 2;
     while (retries >= 0) {
@@ -223,7 +270,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
     return "";
   }
 
-  // --- DISPATCHER & AUTONOMOUS LOOP ---
   try {
     const userIds = (await kvCmd("smembers", "all_agent_users")) || [];
     const executionResults = [];
@@ -275,6 +321,12 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   const tool = JSON.parse(tc[1]);
                   if (tool.action === "finish") {
                     taskDone = true;
+                  } else if (tool.action === "get_time") {
+                    const timeRes = await agentGetTime(tool.timezone || "UTC");
+                    autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action.`;
+                  } else if (tool.action === "get_weather" && tool.location) {
+                    const weatherRes = await agentGetWeather(tool.location);
+                    autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action.`;
                   } else if (tool.action === "set_schedule" && tool.id) {
                     const existingIdx = schedules.findIndex(s => s.id === tool.id);
                     const scheduleObj = {
@@ -337,7 +389,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
             }
           }
 
-          // Keep task permanently enabled and advance execution clock
           sc.lastRun = now;
           sc.nextRun = now + intervalMs;
           sc.enabled = true;
