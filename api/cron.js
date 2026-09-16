@@ -323,14 +323,19 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     taskDone = true;
                   } else if (tool.action === "get_time") {
                     const timeRes = await agentGetTime(tool.timezone || "UTC");
-                    autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action.`;
+                    lastReply = `🕒 ${timeRes}`;
+                    taskDone = true; // 1-hop finish saves quota!
+                    autoFollowUpPrompt = "";
                   } else if (tool.action === "get_weather" && tool.location) {
                     const weatherRes = await agentGetWeather(tool.location);
-                    autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action.`;
+                    lastReply = `🌤️ ${weatherRes}`;
+                    taskDone = true; // 1-hop finish saves quota!
+                    autoFollowUpPrompt = "";
                   } else if (tool.action === "set_schedule" && tool.id) {
                     const existingIdx = schedules.findIndex(s => s.id === tool.id);
                     const scheduleObj = {
                       id: tool.id,
+                      sessionId: sc.sessionId || null,
                       intervalMinutes: Math.max(1, parseInt(tool.intervalMinutes, 10) || 30),
                       prompt: tool.prompt || "Run scheduled routine.",
                       lastRun: Date.now(),
