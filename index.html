@@ -438,19 +438,16 @@
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
 
-    <!-- Active Schedules Section -->
     <div class="sidebar-section" id="sidebar-schedules-section">
       <h4>In-Tab Agent Schedules <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="promptNewSchedule()">+ Task</button></h4>
       <div id="sidebar-schedules-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
     </div>
 
-    <!-- Long-term Memory Vault Inspector in Sidebar -->
     <div class="sidebar-section" id="sidebar-memory-section">
       <h4>Long-Term Memory Vault <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearLongTermMemory()">Clear</button></h4>
       <div id="sidebar-memory-preview" style="font-family:monospace; font-size:11px; color:var(--muted); max-height:90px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></div>
     </div>
 
-    <!-- User & Vercel KV Cloud Cron Section -->
     <div class="sidebar-section" id="sidebar-kv-section">
       <h4>Cloud Serverless Cron <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="syncUserToVercelKV()">☁️ Sync KV</button></h4>
       <div style="display:flex; flex-direction:column; gap:4px; font-size:11px; font-family:monospace; color:var(--muted);">
@@ -478,7 +475,6 @@
     </div>
   </aside>
 
-  <!-- CDN Inject Modal -->
   <div id="libs-modal-overlay" onclick="toggleLibsModal(false)">
     <div class="libs-modal" onclick="event.stopPropagation()">
       <div class="libs-header">
@@ -967,6 +963,45 @@
       appendChat("system-agent", "🛑 Autonomous cycle terminated by user.");
     }
 
+    // --- TIME & WEATHER NATIVE IMPLEMENTATIONS ---
+    function agentGetTime(timezone = "UTC") {
+      try {
+        const now = new Date();
+        const formatted = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          dateStyle: "full",
+          timeStyle: "long"
+        }).format(now);
+        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+      } catch (e) {
+        return `Error retrieving time for timezone "${timezone}": ${e.message}`;
+      }
+    }
+
+    async function agentGetWeather(location = "London") {
+      try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+        if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
+        const geoData = await geoRes.json();
+        if (!geoData.results || !geoData.results.length) {
+          return `Location "${location}" not found.`;
+        }
+        const { latitude, longitude, name, admin1, country } = geoData.results[0];
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+        if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
+        const wData = await weatherRes.json();
+        const cur = wData.current;
+        return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
+- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}%
+- Wind Speed: ${cur.wind_speed_10m} km/h
+- Precipitation: ${cur.precipitation} mm
+- Recorded At: ${cur.time} (${wData.timezone})`;
+      } catch (err) {
+        return `Weather fetch error: ${err.message}`;
+      }
+    }
+
     async function callBackendProxy(targetUrl, method = "GET", headers = {}, body = null) {
       const payload = { targetUrl, method: method.toUpperCase(), headers, body };
 
@@ -1142,7 +1177,7 @@
       if (isWriting) promptInput.placeholder = "Prompt to write essays, refine paragraphs, summarize...";
       else if (isData) promptInput.placeholder = "Paste data, ask for chart trends, CSV summaries...";
       else if (isWebDev) promptInput.placeholder = "Prompt AI to code, inspect, inject CDNs, or fix...";
-      else promptInput.placeholder = "Search web, fetch URLs, read skill.md, or run APIs...";
+      else promptInput.placeholder = "Ask time, weather, web search, fetch URLs, or run APIs...";
 
       document.getElementById("kv-user-id").innerText = getOrInitUserId();
       renderMemoryPreview();
@@ -2228,6 +2263,16 @@ Or copy an entire file directly to long-term memory:
 8. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
+\`\`\`
+
+9. Get Current Time & Date:
+\`\`\`tool_call
+{"action": "get_time", "timezone": "America/New_York"}
+\`\`\`
+
+10. Get Live Weather:
+\`\`\`tool_call
+{"action": "get_weather", "location": "Miami, FL"}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -2262,7 +2307,7 @@ B,20
       if (activeMode === "general") {
         const longTermMem = JSON.stringify(getLongTermMemory(), null, 2);
         const schedulesContext = JSON.stringify(agentSchedules, null, 2);
-        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, API capabilities, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
+        return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, Weather & Time APIs, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 Files:
@@ -2287,13 +2332,13 @@ All Available Files:
 ${currentFilesContext}
 ${commonTools}
 
-9. Autonomous CDN Injection:
+11. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-10. Code Updates:
+12. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2478,6 +2523,16 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+            } else if (tool.action === "get_time") {
+              appendChat("system-agent", `🕒 Checking current time for "${tool.timezone || 'UTC'}"...`);
+              const timeRes = agentGetTime(tool.timezone || "UTC");
+              appendChat("system-agent", `⏳ ${timeRes}`);
+              autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action.`;
+            } else if (tool.action === "get_weather" && tool.location) {
+              appendChat("system-agent", `🌤️ Fetching live weather for "${tool.location}"...`);
+              const weatherRes = await agentGetWeather(tool.location);
+              appendChat("system-agent", `🌡️ ${weatherRes}`);
+              autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action.`;
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
             } else if (tool.action === "save_to_longterm_memory") {
@@ -2580,7 +2635,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               `🛑 Reached 3-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution in the background via Vercel KV.`
             );
 
-            // Register standard task that stays active
             setAgentSchedule(
               taskId,
               1,
