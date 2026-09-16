@@ -529,7 +529,6 @@
     <div class="top-bar">
       <button class="icon-btn" onclick="toggleSidebar()">☰</button>
       
-      <!-- Mode Swapper -->
       <select id="mode-select" class="mode-btn" onchange="onModeChange()">
         <option value="webdev">💻 Web Dev</option>
         <option value="writing">✍️ Writing / Document</option>
@@ -568,7 +567,6 @@
   </nav>
 
   <main>
-    <!-- View: Chat -->
     <div id="view-chat" class="view-panel active">
       <div class="panel-header">
         <span id="chat-header-title">Autonomous Agent</span>
@@ -601,7 +599,6 @@
       </div>
     </div>
 
-    <!-- View: Code/Document Workspace -->
     <div id="view-code" class="view-panel">
       <div class="panel-header">
         <span id="files-header-title">Files & Code</span>
@@ -611,7 +608,6 @@
       <textarea id="code-editor" spellcheck="false" oninput="onCodeManualEdit()"></textarea>
     </div>
 
-    <!-- View: Universal Artifact Canvas -->
     <div id="view-preview" class="view-panel">
       <div class="preview-floating-bar">
         <button class="primary" onclick="switchTab('chat')">← Chat</button>
@@ -712,7 +708,6 @@
     let isAutoLooping = false;
     let autonomousHopCount = 0;
 
-    // --- USER IDENTIFICATION & VERCEL KV CRON SYNC ---
     function getOrInitUserId() {
       let uid = localStorage.getItem("omni_user_id");
       if (!uid) {
@@ -772,11 +767,9 @@
           statusEl.innerText = "Sync Failed";
           statusEl.style.color = "var(--danger)";
         }
-        console.warn("KV sync note:", err);
       }
     }
 
-    // --- LONG-TERM MEMORY VAULT ---
     function getLongTermMemory() {
       return JSON.parse(localStorage.getItem("omni_general_longterm_memory") || "{}");
     }
@@ -813,7 +806,6 @@
       box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
-    // --- AUTONOMOUS IN-TAB SCHEDULER ENGINE ---
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
 
     function saveSchedules() {
@@ -1322,7 +1314,6 @@
       };
 
       speechRecognizer.onerror = (e) => {
-        console.error("Speech Error:", e);
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
         isRecording = false;
         btn.classList.remove("recording");
@@ -1866,7 +1857,6 @@
 
       setTimeout(() => {
         if (lastCapturedError) {
-          console.warn("Autonomous verification flagged runtime error:", lastCapturedError);
           return;
         }
 
@@ -2581,18 +2571,20 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
+        // Persistent 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
-            const handoffId = `handoff_${Date.now()}`;
+            const taskId = `task_bg_${Date.now()}`;
             appendChat(
               "system-agent",
-              `🛑 Reached 3-step in-tab limit! To prevent quota drops, the agent has paused and offloaded the remainder of this task to the Cloud Cron schedule [${handoffId}]. Vercel KV will complete it in the background!`
+              `🛑 Reached 3-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution in the background via Vercel KV.`
             );
 
+            // Register standard task that stays active
             setAgentSchedule(
-              handoffId,
+              taskId,
               1,
-              `[OFFLOADED TASK HANDOFF]: Continue execution from step 3 observations:\n${autoFollowUpPrompt}`
+              `[CONTINUE TASK]: Resume execution from step 3:\n${autoFollowUpPrompt}`
             );
 
             setLoopUI(false);
