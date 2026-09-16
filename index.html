@@ -724,10 +724,12 @@
 
     async function syncUserToVercelKV() {
       const userId = getOrInitUserId();
+      const provider = document.getElementById("provider-select").value;
       const apiKey = document.getElementById("api-key-input").value.trim();
       const current = getActiveSession();
       const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
       const statusEl = document.getElementById("kv-sync-status");
+      const rules = localStorage.getItem("omni_cursorrules") || "";
 
       if (!apiKey) {
         if (statusEl) {
@@ -745,10 +747,14 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId,
+            provider,
             apiKey,
             model,
+            rules,
             active: true,
-            schedules: agentSchedules
+            schedules: agentSchedules,
+            files: current?.files || {},
+            longterm_memory: getLongTermMemory()
           })
         });
 
@@ -757,7 +763,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: ${agentSchedules.length} tasks registered in Vercel KV for user [${userId}].`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -783,6 +789,7 @@
       };
       localStorage.setItem("omni_general_longterm_memory", JSON.stringify(mem));
       renderMemoryPreview();
+      syncUserToVercelKV();
       return true;
     }
 
@@ -790,6 +797,7 @@
       if (confirm("Clear all global long-term memory for General Agent?")) {
         localStorage.removeItem("omni_general_longterm_memory");
         renderMemoryPreview();
+        syncUserToVercelKV();
       }
     }
 
@@ -815,7 +823,7 @@
     }
 
     function setAgentSchedule(id, intervalMinutes, prompt) {
-      intervalMinutes = Math.max(1, parseInt(intervalMinutes) || 30);
+      intervalMinutes = Math.max(1, parseInt(intervalMinutes, 10) || 30);
       const existingIdx = agentSchedules.findIndex(s => s.id === id);
       const scheduleObj = {
         id,
@@ -1539,6 +1547,7 @@
     }
     function saveRules() {
       localStorage.setItem("omni_cursorrules", document.getElementById("rules-input").value);
+      syncUserToVercelKV();
     }
     function saveSessions() {
       localStorage.setItem("omni_sessions", JSON.stringify(sessions));
@@ -1630,6 +1639,7 @@
         saveSessions();
       }
       onProviderChange();
+      syncUserToVercelKV();
     }
 
     function onUserChangeModel() {
@@ -1639,6 +1649,7 @@
         current.selectedModel = val;
         saveSessions();
       }
+      syncUserToVercelKV();
     }
 
     function loadSessionUI() {
@@ -2175,6 +2186,7 @@
 
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${modelSelect.value}`;
+        syncUserToVercelKV();
       } catch (err) {
         statusDot.className = "status-dot offline";
         statusText.innerText = "Connection Error: " + err.message;
@@ -2563,14 +2575,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         statusDot.className = "status-dot active";
         statusText.innerText = `Connected: ${model}`;
 
-        // Track consecutive client hops
         if (!autoFollowUpPrompt) {
           autonomousHopCount = 0;
         } else {
           autonomousHopCount++;
         }
 
-        // 3-Step Circuit Breaker with Cloud Cron Handoff
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const handoffId = `handoff_${Date.now()}`;
@@ -2579,7 +2589,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               `🛑 Reached 3-step in-tab limit! To prevent quota drops, the agent has paused and offloaded the remainder of this task to the Cloud Cron schedule [${handoffId}]. Vercel KV will complete it in the background!`
             );
 
-            // Register a 1-minute handoff routine in schedules
             setAgentSchedule(
               handoffId,
               1,
