@@ -812,9 +812,11 @@
 
     function setAgentSchedule(id, intervalMinutes, prompt) {
       intervalMinutes = Math.max(1, parseInt(intervalMinutes, 10) || 30);
+      const current = getActiveSession();
       const existingIdx = agentSchedules.findIndex(s => s.id === id);
       const scheduleObj = {
         id,
+        sessionId: current ? current.id : null,
         intervalMinutes,
         prompt,
         lastRun: Date.now(),
@@ -896,6 +898,19 @@
       sc.lastRun = Date.now();
       sc.nextRun = Date.now() + (sc.intervalMinutes * 60 * 1000);
       saveSchedules();
+
+      // Session Isolation: Do not hijack current screen if schedule belongs to another chat session
+      if (sc.sessionId && sc.sessionId !== activeSessionId) {
+        const targetSession = sessions.find(s => s.id === sc.sessionId);
+        if (targetSession) {
+          targetSession.messages.push({
+            role: "system-agent",
+            text: `⏰ [BACKGROUND SCHEDULE TRIGGER]: Routine "${sc.id}" fired.`
+          });
+          saveSessions();
+        }
+        return;
+      }
 
       appendChat("system-agent", `⏰ [SCHEDULE TRIGGER]: Executing routine "${sc.id}"...`);
       document.getElementById("prompt-input").value = sc.prompt;
@@ -2524,15 +2539,17 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
             } else if (tool.action === "get_time") {
-              appendChat("system-agent", `🕒 Checking current time for "${tool.timezone || 'UTC'}"...`);
-              const timeRes = agentGetTime(tool.timezone || "UTC");
-              appendChat("system-agent", `⏳ ${timeRes}`);
-              autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action.`;
+              const timeRes = agentGetTime(tool.timezone || "America/New_York");
+              appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
+              current.messages.push({ role: "assistant", text: `🕒 ${timeRes}` });
+              agentExplicitFinished = true; // ✅ 1-Hop Finish — saves quota!
+              autoFollowUpPrompt = "";
             } else if (tool.action === "get_weather" && tool.location) {
-              appendChat("system-agent", `🌤️ Fetching live weather for "${tool.location}"...`);
               const weatherRes = await agentGetWeather(tool.location);
-              appendChat("system-agent", `🌡️ ${weatherRes}`);
-              autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action.`;
+              appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
+              current.messages.push({ role: "assistant", text: `🌤️ ${weatherRes}` });
+              agentExplicitFinished = true; // ✅ 1-Hop Finish — saves quota!
+              autoFollowUpPrompt = "";
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
             } else if (tool.action === "save_to_longterm_memory") {
