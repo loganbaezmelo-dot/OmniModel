@@ -754,7 +754,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -799,7 +799,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -817,6 +817,7 @@
       const scheduleObj = {
         id,
         sessionId: current ? current.id : null,
+        mode: current ? (current.mode || activeMode) : activeMode,
         intervalMinutes,
         prompt,
         lastRun: Date.now(),
@@ -830,7 +831,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
       return true;
     }
 
@@ -899,13 +900,14 @@
       sc.nextRun = Date.now() + (sc.intervalMinutes * 60 * 1000);
       saveSchedules();
 
-      // Session Isolation: Do not hijack current screen if schedule belongs to another chat session
-      if (sc.sessionId && sc.sessionId !== activeSessionId) {
-        const targetSession = sessions.find(s => s.id === sc.sessionId);
+      const targetSession = sessions.find(s => s.id === sc.sessionId);
+
+      // Strict Session & Mode Isolation Guard
+      if (!sc.sessionId || sc.sessionId !== activeSessionId || (targetSession && targetSession.mode !== activeMode)) {
         if (targetSession) {
           targetSession.messages.push({
             role: "system-agent",
-            text: `⏰ [BACKGROUND SCHEDULE TRIGGER]: Routine "${sc.id}" fired.`
+            text: `⏰ [BACKGROUND SCHEDULE]: Routine "${sc.id}" executed silently in the background.`
           });
           saveSessions();
         }
@@ -979,7 +981,7 @@
     }
 
     // --- TIME & WEATHER NATIVE IMPLEMENTATIONS ---
-    function agentGetTime(timezone = "UTC") {
+    function agentGetTime(timezone = "America/New_York") {
       try {
         const now = new Date();
         const formatted = new Intl.DateTimeFormat("en-US", {
@@ -987,7 +989,7 @@
           dateStyle: "full",
           timeStyle: "long"
         }).format(now);
-        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+        return `Current Date & Time (${timezone}): ${formatted} [ISO:${now.toISOString()}]`;
       } catch (e) {
         return `Error retrieving time for timezone "${timezone}": ${e.message}`;
       }
@@ -1007,9 +1009,8 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}%
-- Wind Speed: ${cur.wind_speed_10m} km/h
+- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1146,9 +1147,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
+        return `HTTP Request failed (Status ${res.status}):${res.data}`;
       }
-      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1349,7 +1350,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1521,7 +1522,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from ${repo}!`);
+        alert(`Successfully pulled ${path} from${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1576,7 +1577,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to ${repo}!`);
+        alert(`Successfully pushed ${targetPath} to${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -1933,7 +1934,7 @@
         const logsContainer = document.getElementById("console-logs");
         const row = document.createElement("div");
         row.className = `log-item ${e.data.level}`;
-        row.innerText = `[${e.data.level.toUpperCase()}] ${e.data.text}`;
+        row.innerText = `[${e.data.level.toUpperCase()}]${e.data.text}`;
         logsContainer.appendChild(row);
         logsContainer.scrollTop = logsContainer.scrollHeight;
       }
@@ -2055,8 +2056,6 @@
       saveCurrentKey();
       statusText.innerText = "Discovering models...";
 
-      const existingDomVal = modelSelect.value;
-
       try {
         let models = [];
 
@@ -2090,14 +2089,13 @@
             modelSelect.appendChild(opt);
           });
 
-          if (existingDomVal && models.includes(existingDomVal)) {
-            modelSelect.value = existingDomVal;
-          } else if (preferredModel && models.includes(preferredModel)) {
-            modelSelect.value = preferredModel;
-          } else if (current?.selectedModel && models.includes(current.selectedModel)) {
+          // Strict priority logic: Saved Session Model -> gemini-pro-latest -> first available
+          if (current?.selectedModel && models.includes(current.selectedModel)) {
             modelSelect.value = current.selectedModel;
+          } else if (models.includes("gemini-pro-latest")) {
+            modelSelect.value = "gemini-pro-latest";
           } else {
-            modelSelect.value = models.find(m => m === "gemini-pro-latest") || models[0];
+            modelSelect.value = models[0];
           }
 
         } else if (provider === "openai") {
@@ -2113,8 +2111,7 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal : 
-                         (preferredModel && models.includes(preferredModel)) ? preferredModel : 
+          const target = (preferredModel && models.includes(preferredModel)) ? preferredModel : 
                          (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : models[0];
           if (target) modelSelect.value = target;
 
@@ -2131,8 +2128,7 @@
             opt.value = m; opt.textContent = m;
             modelSelect.appendChild(opt);
           });
-          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal : 
-                         (preferredModel && models.includes(preferredModel)) ? preferredModel : 
+          const target = (preferredModel && models.includes(preferredModel)) ? preferredModel : 
                          (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : (models.find(m => m.includes("fable-5.1")) || models[0]);
           if (target) modelSelect.value = target;
 
@@ -2185,8 +2181,7 @@
             modelSelect.appendChild(optgroup);
           });
 
-          const target = (existingDomVal && data.data.find(m => m.id === existingDomVal)) ? existingDomVal :
-                         (preferredModel && data.data.find(m => m.id === preferredModel)) ? preferredModel :
+          const target = (preferredModel && data.data.find(m => m.id === preferredModel)) ? preferredModel :
                          (current?.selectedModel && data.data.find(m => m.id === current.selectedModel)) ? current.selectedModel :
                          data.data.find(m => m.id.includes("deepseek-v4") || m.id.includes("deepseek-r1") || m.id.includes("deepseek-chat"))?.id ||
                          modelSelect.querySelector("option")?.value;
@@ -2212,8 +2207,7 @@
             modelSelect.appendChild(opt);
           });
 
-          const target = (existingDomVal && models.includes(existingDomVal)) ? existingDomVal :
-                         (preferredModel && models.includes(preferredModel)) ? preferredModel :
+          const target = (preferredModel && models.includes(preferredModel)) ? preferredModel :
                          (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel : (models.find(m => m.includes("llama-3.3-70b")) || models[0]);
           if (target) modelSelect.value = target;
         }
@@ -2295,8 +2289,7 @@ Or copy an entire file directly to long-term memory:
 Project Rules: ${customRules}
 Active Document: "${activeFileName}"
 Workspace Files:
-${currentFilesContext}
-${commonTools}
+${currentFilesContext}${commonTools}
 
 Return your main document content updated in:
 \`\`\`filepath:${activeFileName}
@@ -2308,8 +2301,7 @@ Return your main document content updated in:
         return `You are a Data Analyst and Visualization Agent.
 Project Rules: ${customRules}
 Current Files:
-${currentFilesContext}
-${commonTools}
+${currentFilesContext}${commonTools}
 
 Format files like:
 \`\`\`filepath:data.csv
@@ -2344,8 +2336,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
 Project Rules: ${customRules}
 Currently Active File: "${activeFileName}"
 All Available Files:
-${currentFilesContext}
-${commonTools}
+${currentFilesContext}${commonTools}
 
 11. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
@@ -2542,13 +2533,13 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const timeRes = agentGetTime(tool.timezone || "America/New_York");
               appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
               current.messages.push({ role: "assistant", text: `🕒 ${timeRes}` });
-              agentExplicitFinished = true; // ✅ 1-Hop Finish — saves quota!
+              agentExplicitFinished = true;
               autoFollowUpPrompt = "";
             } else if (tool.action === "get_weather" && tool.location) {
               const weatherRes = await agentGetWeather(tool.location);
               appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
               current.messages.push({ role: "assistant", text: `🌤️ ${weatherRes}` });
-              agentExplicitFinished = true; // ✅ 1-Hop Finish — saves quota!
+              agentExplicitFinished = true;
               autoFollowUpPrompt = "";
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
