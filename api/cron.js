@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   }
 
   // --- NATIVE AGENT TOOLS ---
-  async function agentGetTime(timezone = "UTC") {
+  async function agentGetTime(timezone = "America/New_York") {
     try {
       const now = new Date();
       const formatted = new Intl.DateTimeFormat("en-US", {
@@ -314,6 +314,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
               lastReply = await callProviderModel(provider, model, apiKey, systemPrompt, currentPrompt);
 
               let autoFollowUpPrompt = "";
+              const planMatch = lastReply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
               for (const tc of toolCalls) {
@@ -322,20 +323,29 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   if (tool.action === "finish") {
                     taskDone = true;
                   } else if (tool.action === "get_time") {
-                    const timeRes = await agentGetTime(tool.timezone || "UTC");
-                    lastReply = `🕒 ${timeRes}`;
-                    taskDone = true; // 1-hop finish saves quota!
-                    autoFollowUpPrompt = "";
+                    const timeRes = await agentGetTime(tool.timezone || "America/New_York");
+                    if (planMatch && planMatch[1]) {
+                      autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action in your plan.`;
+                    } else {
+                      lastReply = `🕒 ${timeRes}`;
+                      taskDone = true;
+                      autoFollowUpPrompt = "";
+                    }
                   } else if (tool.action === "get_weather" && tool.location) {
                     const weatherRes = await agentGetWeather(tool.location);
-                    lastReply = `🌤️ ${weatherRes}`;
-                    taskDone = true; // 1-hop finish saves quota!
-                    autoFollowUpPrompt = "";
+                    if (planMatch && planMatch[1]) {
+                      autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
+                    } else {
+                      lastReply = `🌤️ ${weatherRes}`;
+                      taskDone = true;
+                      autoFollowUpPrompt = "";
+                    }
                   } else if (tool.action === "set_schedule" && tool.id) {
                     const existingIdx = schedules.findIndex(s => s.id === tool.id);
                     const scheduleObj = {
                       id: tool.id,
                       sessionId: sc.sessionId || null,
+                      mode: sc.mode || "general",
                       intervalMinutes: Math.max(1, parseInt(tool.intervalMinutes, 10) || 30),
                       prompt: tool.prompt || "Run scheduled routine.",
                       lastRun: Date.now(),
