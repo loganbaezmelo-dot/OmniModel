@@ -2097,6 +2097,7 @@
             modelSelect.appendChild(opt);
           });
 
+          // Priority: Saved Session Model -> gemini-pro-latest -> first model
           if (current?.selectedModel && models.includes(current.selectedModel)) {
             modelSelect.value = current.selectedModel;
           } else if (models.includes("gemini-pro-latest")) {
@@ -2235,6 +2236,19 @@
     }
 
     function getModeSystemPrompt(customRules, currentFilesContext) {
+      const memoryKeys = Object.keys(getLongTermMemory());
+      const schedulesContext = JSON.stringify(agentSchedules, null, 2);
+
+      const fallbackProtocol = `
+AUTONOMOUS RETRIEVAL & MISSING CONTEXT RULES:
+- NEVER guess, hallucinate, or say you lack information if an available tool or memory key can find it.
+- If the user asks about prior context, preferences, credentials, or historical project data not in the current files, check [AVAILABLE LONG-TERM MEMORY KEYS] and immediately call:
+  \`\`\`tool_call
+  {"action": "read_longterm_memory", "key": "<key_name>"}
+  \`\`\`
+- If the request refers to real-time events, documentation, public URLs, or APIs not present in the workspace, immediately invoke \`web_search\`, \`web_fetch\`, \`get_time\`, or \`get_weather\`.
+- Proactively retrieve the needed info first, then complete the user request in the subsequent step.`;
+
       const commonTools = `
 AVAILABLE TOOL ACTIONS:
 1. Multi-Step Plan:
@@ -2276,7 +2290,7 @@ Or copy an entire file directly to long-term memory:
 {"action": "save_to_longterm_memory", "from_file": "notes.txt"}
 \`\`\`
 
-8. Read Specific Long-Term Memory (On-demand recall to save context):
+8. Read Specific Long-Term Memory (On-demand recall):
 \`\`\`tool_call
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
@@ -2301,7 +2315,8 @@ Or copy an entire file directly to long-term memory:
 Project Rules: ${customRules}
 Active Document: "${activeFileName}"
 Workspace Files:
-${currentFilesContext}${commonTools}
+${currentFilesContext}
+${fallbackProtocol}${commonTools}
 
 Return your main document content updated in:
 \`\`\`filepath:${activeFileName}
@@ -2313,7 +2328,8 @@ Return your main document content updated in:
         return `You are a Data Analyst and Visualization Agent.
 Project Rules: ${customRules}
 Current Files:
-${currentFilesContext}${commonTools}
+${currentFilesContext}
+${fallbackProtocol}${commonTools}
 
 Format files like:
 \`\`\`filepath:data.csv
@@ -2324,8 +2340,6 @@ B,20
       }
 
       if (activeMode === "general") {
-        const memoryKeys = Object.keys(getLongTermMemory());
-        const schedulesContext = JSON.stringify(agentSchedules, null, 2);
         return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, Weather & Time APIs, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
@@ -2335,7 +2349,8 @@ ${currentFilesContext}
 
 [AVAILABLE LONG-TERM MEMORY KEYS]:
 ${JSON.stringify(memoryKeys)}
-(Use "read_longterm_memory" if you need specific archived records. Rely on the active workspace files for your main execution!)
+
+${fallbackProtocol}
 
 [ACTIVE RECURRING SCHEDULES (Synced to Vercel KV)]:
 ${schedulesContext}
@@ -2350,7 +2365,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
 Project Rules: ${customRules}
 Currently Active File: "${activeFileName}"
 All Available Files:
-${currentFilesContext}${commonTools}
+${currentFilesContext}
+${fallbackProtocol}${commonTools}
 
 12. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
