@@ -116,14 +116,15 @@ export default async function handler(req, res) {
     }
   }
 
-  function getCronSystemPrompt(customRules, currentFilesContext, longTermMemContext) {
+  function getCronSystemPrompt(customRules, currentFilesContext, availableMemoryKeys) {
     return `You are an Unconstrained Autonomous Problem Solver executing on the background serverless cron worker.
 User custom instructions: ${customRules || ""}
-Files:
+Primary Workspace Files (PRIORITIZE THESE FILES OVER OLD MEMORIES):
 ${currentFilesContext}
 
-[GLOBAL LONG-TERM MEMORY VAULT]:
-${longTermMemContext}
+[AVAILABLE LONG-TERM MEMORY KEYS]:
+${JSON.stringify(availableMemoryKeys)}
+(Long-term memory is stored off-context to save tokens. Use "read_longterm_memory" if you need specific archived records.)
 
 AVAILABLE TOOL ACTIONS:
 1. Multi-Step Plan:
@@ -161,17 +162,22 @@ AVAILABLE TOOL ACTIONS:
 {"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
 \`\`\`
 
-8. Set Autonomous Recurring Schedule:
+8. Read Specific Long-Term Memory:
+\`\`\`tool_call
+{"action": "read_longterm_memory", "key": "memory_key"}
+\`\`\`
+
+9. Set Autonomous Recurring Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your recurring task prompt."}
 \`\`\`
 
-9. Get Current Time & Date:
+10. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-10. Get Live Weather:
+11. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\`
@@ -255,7 +261,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
             })
           });
           const data = await res.json();
-          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+          if (data.error) throw new Error(data.error.message);
           return data.content?.[0]?.text || "";
         }
       } catch (err) {
@@ -307,8 +313,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
           while (hops < 4 && !taskDone) {
             hops++;
             const currentFilesContext = JSON.stringify(userFiles, null, 2);
-            const longTermMemContext = JSON.stringify(userMemory, null, 2);
-            const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, longTermMemContext);
+            const availableMemoryKeys = Object.keys(userMemory);
+            const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, availableMemoryKeys);
 
             try {
               lastReply = await callProviderModel(provider, model, apiKey, systemPrompt, currentPrompt);
@@ -340,6 +346,10 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
+                  } else if (tool.action === "read_longterm_memory" && tool.key) {
+                    const rec = userMemory[tool.key];
+                    const content = rec ? (typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)) : `Key "${tool.key}" not found in long-term memory.`;
+                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nProceed with your objective.`;
                   } else if (tool.action === "set_schedule" && tool.id) {
                     const existingIdx = schedules.findIndex(s => s.id === tool.id);
                     const scheduleObj = {
