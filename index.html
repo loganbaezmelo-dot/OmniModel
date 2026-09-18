@@ -754,7 +754,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -799,7 +799,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -831,7 +831,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
       return true;
     }
 
@@ -989,7 +989,7 @@
           dateStyle: "full",
           timeStyle: "long"
         }).format(now);
-        return `Current Date & Time (${timezone}): ${formatted} [ISO:${now.toISOString()}]`;
+        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
       } catch (e) {
         return `Error retrieving time for timezone "${timezone}": ${e.message}`;
       }
@@ -1009,8 +1009,9 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
+- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}%
+- Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1147,9 +1148,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}):${res.data}`;
+        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
       }
-      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1350,7 +1351,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1522,7 +1523,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from${repo}!`);
+        alert(`Successfully pulled ${path} from ${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1577,7 +1578,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to${repo}!`);
+        alert(`Successfully pushed ${targetPath} to ${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -2089,7 +2090,7 @@
             modelSelect.appendChild(opt);
           });
 
-          // Strict priority logic: Saved Session Model -> gemini-pro-latest -> first available
+          // Priority: Saved Session Model -> gemini-pro-latest -> first model
           if (current?.selectedModel && models.includes(current.selectedModel)) {
             modelSelect.value = current.selectedModel;
           } else if (models.includes("gemini-pro-latest")) {
@@ -2533,14 +2534,24 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const timeRes = agentGetTime(tool.timezone || "America/New_York");
               appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
               current.messages.push({ role: "assistant", text: `🕒 ${timeRes}` });
-              agentExplicitFinished = true;
-              autoFollowUpPrompt = "";
+
+              if (planMatch && planMatch[1]) {
+                autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action in your plan.`;
+              } else {
+                agentExplicitFinished = true;
+                autoFollowUpPrompt = "";
+              }
             } else if (tool.action === "get_weather" && tool.location) {
               const weatherRes = await agentGetWeather(tool.location);
               appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
               current.messages.push({ role: "assistant", text: `🌤️ ${weatherRes}` });
-              agentExplicitFinished = true;
-              autoFollowUpPrompt = "";
+
+              if (planMatch && planMatch[1]) {
+                autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
+              } else {
+                agentExplicitFinished = true;
+                autoFollowUpPrompt = "";
+              }
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
             } else if (tool.action === "save_to_longterm_memory") {
