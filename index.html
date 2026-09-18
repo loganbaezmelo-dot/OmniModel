@@ -782,6 +782,13 @@
       return true;
     }
 
+    function readLongTermMemoryKey(key) {
+      const mem = getLongTermMemory();
+      if (!mem[key]) return `Memory key "${key}" does not exist in vault.`;
+      const val = mem[key].content;
+      return typeof val === "string" ? val : JSON.stringify(val);
+    }
+
     function clearLongTermMemory() {
       if (confirm("Clear all global long-term memory for General Agent?")) {
         localStorage.removeItem("omni_general_longterm_memory");
@@ -2090,7 +2097,6 @@
             modelSelect.appendChild(opt);
           });
 
-          // Priority: Saved Session Model -> gemini-pro-latest -> first model
           if (current?.selectedModel && models.includes(current.selectedModel)) {
             modelSelect.value = current.selectedModel;
           } else if (models.includes("gemini-pro-latest")) {
@@ -2270,17 +2276,22 @@ Or copy an entire file directly to long-term memory:
 {"action": "save_to_longterm_memory", "from_file": "notes.txt"}
 \`\`\`
 
-8. Set Autonomous Recurring Cloud/In-Tab Schedule:
+8. Read Specific Long-Term Memory (On-demand recall to save context):
+\`\`\`tool_call
+{"action": "read_longterm_memory", "key": "memory_key"}
+\`\`\`
+
+9. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
 \`\`\`
 
-9. Get Current Time & Date:
+10. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-10. Get Live Weather:
+11. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\``;
@@ -2313,16 +2324,18 @@ B,20
       }
 
       if (activeMode === "general") {
-        const longTermMem = JSON.stringify(getLongTermMemory(), null, 2);
+        const memoryKeys = Object.keys(getLongTermMemory());
         const schedulesContext = JSON.stringify(agentSchedules, null, 2);
         return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, Weather & Time APIs, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
-Files:
+
+PRIMARY WORKSPACE FILES (PRIORITIZE THESE FILES OVER OLD MEMORIES):
 ${currentFilesContext}
 
-[GLOBAL LONG-TERM MEMORY VAULT]:
-${longTermMem}
+[AVAILABLE LONG-TERM MEMORY KEYS]:
+${JSON.stringify(memoryKeys)}
+(Use "read_longterm_memory" if you need specific archived records. Rely on the active workspace files for your main execution!)
 
 [ACTIVE RECURRING SCHEDULES (Synced to Vercel KV)]:
 ${schedulesContext}
@@ -2339,13 +2352,13 @@ Currently Active File: "${activeFileName}"
 All Available Files:
 ${currentFilesContext}${commonTools}
 
-11. Autonomous CDN Injection:
+12. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-12. Code Updates:
+13. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2552,6 +2565,11 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
+            } else if (tool.action === "read_longterm_memory" && tool.key) {
+              appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
+              const memData = readLongTermMemoryKey(tool.key);
+              appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
+              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed with your objective.`;
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
             } else if (tool.action === "save_to_longterm_memory") {
