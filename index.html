@@ -449,7 +449,12 @@
     <div class="sidebar-list" id="sidebar-list"></div>
 
     <div class="sidebar-section" id="sidebar-schedules-section">
-      <h4>In-Tab Agent Schedules <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="promptNewSchedule()">+ Task</button></h4>
+      <h4>In-Tab Agent Schedules 
+        <div style="display:flex; gap:4px;">
+          <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="cleanupTempSchedules()" title="Remove task_bg_ continuation tasks">🧹 Clean Temp</button>
+          <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="promptNewSchedule()">+ Task</button>
+        </div>
+      </h4>
       <div id="sidebar-schedules-list" style="display:flex; flex-direction:column; gap:6px; max-height:160px; overflow-y:auto;"></div>
     </div>
 
@@ -827,6 +832,19 @@
       syncUserToVercelKV();
     }
 
+    function cleanupTempSchedules(specificId = null) {
+      const beforeCount = agentSchedules.length;
+      if (specificId) {
+        agentSchedules = agentSchedules.filter(s => s.id !== specificId);
+      } else {
+        agentSchedules = agentSchedules.filter(s => !s.id.startsWith("task_bg_"));
+      }
+      const removed = beforeCount - agentSchedules.length;
+      saveSchedules();
+      appendChat("system-agent", `🧹 Removed ${removed} temporary continuation schedule(s). Permanent routines remain safe!`);
+      return removed;
+    }
+
     function setAgentSchedule(id, intervalMinutes, prompt) {
       intervalMinutes = Math.max(1, parseInt(intervalMinutes, 10) || 30);
       const current = getActiveSession();
@@ -891,10 +909,11 @@
 
         const remainingMs = sc.nextRun - Date.now();
         const minsLeft = Math.max(0, Math.round(remainingMs / 60000));
+        const isTemp = sc.id.startsWith("task_bg_");
 
         item.innerHTML = `
           <div class="schedule-head">
-            <span>${sc.id} (${sc.intervalMinutes}m)</span>
+            <span>${isTemp ? '⚡ [Temp] ' : ''}${sc.id} (${sc.intervalMinutes}m)</span>
             <span style="color:${sc.enabled ? 'var(--success)' : 'var(--danger)'};">${sc.enabled ? `${minsLeft}m left` : 'Paused'}</span>
           </div>
           <div style="color:var(--muted); font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
@@ -1024,8 +1043,9 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
+- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}%
+- Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1162,9 +1182,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}):${res.data}`;
+        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
       }
-      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1365,7 +1385,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1537,7 +1557,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from${repo}!`);
+        alert(`Successfully pulled ${path} from ${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1592,7 +1612,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to${repo}!`);
+        alert(`Successfully pushed ${targetPath} to ${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -2256,6 +2276,11 @@ AUTONOMOUS RETRIEVAL & MISSING CONTEXT RULES:
   \`\`\`tool_call
   {"action": "read_longterm_memory", "key": "<key_name>"}
   \`\`\`
+- TEMPORARY SCHEDULE CLEANUP: Whenever you finish a background continuation task (task IDs starting with "task_bg_"), or if you notice unwanted temporary handoff schedules, invoke:
+  \`\`\`tool_call
+  {"action": "remove_temp_schedules"}
+  \`\`\`
+  This deletes leftover step-break loops while keeping permanent schedules and heartbeats untouched.
 - If the request refers to real-time events, documentation, public URLs, or APIs not present in the workspace, immediately invoke \`web_search\`, \`web_fetch\`, \`get_time\`, or \`get_weather\`.
 - Proactively retrieve the needed info first, then complete the user request in the subsequent step.`;
 
@@ -2305,17 +2330,22 @@ Or copy an entire file directly to long-term memory:
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
 
-9. Set Autonomous Recurring Cloud/In-Tab Schedule:
+9. Remove Temporary Continuation Schedules:
+\`\`\`tool_call
+{"action": "remove_temp_schedules"}
+\`\`\`
+
+10. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
 \`\`\`
 
-10. Get Current Time & Date:
+11. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-11. Get Live Weather:
+12. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\``;
@@ -2378,13 +2408,13 @@ All Available Files:
 ${currentFilesContext}
 ${fallbackProtocol}${commonTools}
 
-12. Autonomous CDN Injection:
+13. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-13. Code Updates:
+14. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2578,6 +2608,11 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+              // Auto-cleanup any temporary handoff task associated with this run
+              cleanupTempSchedules();
+            } else if (tool.action === "remove_temp_schedules") {
+              const removed = cleanupTempSchedules(tool.id || null);
+              autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary continuation schedule(s). Proceed with your goal.`;
             } else if (tool.action === "get_time") {
               const timeRes = agentGetTime(tool.timezone || "America/New_York");
               appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
@@ -2698,6 +2733,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
+        // Persistent 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const taskId = `task_bg_${Date.now()}`;
