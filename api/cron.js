@@ -126,14 +126,18 @@ ${currentFilesContext}
 [AVAILABLE LONG-TERM MEMORY KEYS]:
 ${JSON.stringify(availableMemoryKeys)}
 
-AUTONOMOUS DECISION RULES FOR MISSING / UNKNOWN INFO:
-1. NEVER guess, assume, or say you don't know if a tool or memory key can provide the answer.
-2. If the user refers to past discussions, user preferences, prior instructions, or credentials not in the current session, check the [AVAILABLE LONG-TERM MEMORY KEYS] and immediately call:
+AUTONOMOUS DECISION RULES:
+1. NEVER guess or hallucinate if an available tool or memory key can answer the prompt.
+2. If asked about prior session history, preferences, or credentials not present in files, call:
    \`\`\`tool_call
    {"action": "read_longterm_memory", "key": "<key_name>"}
    \`\`\`
-3. If information is missing about external documentation, code libraries, real-world events, or live state, immediately trigger \`web_search\`, \`web_fetch\`, \`get_time\`, or \`get_weather\`.
-4. Always prioritize active workspace files for ongoing edits, but use tools proactively whenever context is missing.
+3. TEMPORARY SCHEDULE CLEANUP: Whenever you complete a background task that resumed from an earlier 3-step break (task IDs starting with "task_bg_"), or if you notice unwanted temporary handoff schedules, invoke:
+   \`\`\`tool_call
+   {"action": "remove_temp_schedules"}
+   \`\`\`
+   This leaves permanent monitoring/heartbeat schedules untouched while deleting leftover continuation loops.
+4. When finished, call the "finish" tool action.
 
 AVAILABLE TOOL ACTIONS:
 1. Multi-Step Plan:
@@ -176,17 +180,22 @@ AVAILABLE TOOL ACTIONS:
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
 
-9. Set Autonomous Recurring Schedule:
+9. Remove Temporary Step Handoff Schedules:
+\`\`\`tool_call
+{"action": "remove_temp_schedules"}
+\`\`\`
+
+10. Set Autonomous Recurring Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your recurring task prompt."}
 \`\`\`
 
-10. Get Current Time & Date:
+11. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-11. Get Live Weather:
+12. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\`
@@ -308,7 +317,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
       let userFiles = userConfig.files || {};
       let userMemory = userConfig.longterm_memory || {};
 
-      for (const sc of schedules) {
+      for (let i = 0; i < schedules.length; i++) {
+        const sc = schedules[i];
         if (!sc.enabled) continue;
         const intervalMs = (parseInt(sc.intervalMinutes, 10) || 30) * 60 * 1000;
         const lastRun = sc.lastRun || 0;
@@ -337,6 +347,19 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   const tool = JSON.parse(tc[1]);
                   if (tool.action === "finish") {
                     taskDone = true;
+                    // Auto cleanup temporary handoff task if that's what triggered this run
+                    if (sc.id.startsWith("task_bg_")) {
+                      schedules = schedules.filter(s => s.id !== sc.id);
+                    }
+                  } else if (tool.action === "remove_temp_schedules") {
+                    const beforeCount = schedules.length;
+                    if (tool.id) {
+                      schedules = schedules.filter(s => s.id !== tool.id);
+                    } else {
+                      schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                    }
+                    const removed = beforeCount - schedules.length;
+                    autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary handoff schedule(s). Proceed.`;
                   } else if (tool.action === "get_time") {
                     const timeRes = await agentGetTime(tool.timezone || "America/New_York");
                     if (planMatch && planMatch[1]) {
@@ -423,10 +446,12 @@ Always continue executing autonomously until the final objective is fulfilled, t
             }
           }
 
-          sc.lastRun = now;
-          sc.nextRun = now + intervalMs;
-          sc.enabled = true;
-          sc.lastResult = lastReply.slice(0, 300);
+          if (schedules.find(s => s.id === sc.id)) {
+            sc.lastRun = now;
+            sc.nextRun = now + intervalMs;
+            sc.enabled = true;
+            sc.lastResult = lastReply.slice(0, 300);
+          }
 
           executionResults.push({ userId, scheduleId: sc.id, hops, status: "Executed" });
         }
