@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Omni-Model Multi-Studio</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg: #0f1117;
@@ -142,9 +143,17 @@
     .plan-step-item.done { color: var(--success); text-decoration: line-through; opacity: 0.7; }
 
     #chat-history { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
-    .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+    .msg { padding: 10px 14px; border-radius: 8px; max-width: 85%; font-size: 14px; line-height: 1.5; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: var(--accent); color: #fff; white-space: pre-wrap; }
     .msg.assistant { align-self: flex-start; background: var(--card); border: 1px solid var(--border); }
+    .msg.assistant h1, .msg.assistant h2, .msg.assistant h3, .msg.assistant h4 { margin: 8px 0 4px; font-size: 1.1em; color: #fff; }
+    .msg.assistant ul, .msg.assistant ol { margin-left: 20px; margin-bottom: 6px; }
+    .msg.assistant li { margin-bottom: 3px; }
+    .msg.assistant p { margin-bottom: 6px; }
+    .msg.assistant p:last-child { margin-bottom: 0; }
+    .msg.assistant code { background: #090a0f; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 12px; color: #38bdf8; }
+    .msg.assistant pre { background: #090a0f; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+    .msg.assistant pre code { padding: 0; background: none; color: #7dd3fc; }
     .msg.system-agent {
       align-self: center;
       max-width: 95%;
@@ -153,6 +162,7 @@
       color: #93c5fd;
       font-family: monospace;
       font-size: 12px;
+      white-space: pre-wrap;
     }
     .msg img { max-width: 100%; border-radius: 6px; margin-top: 6px; }
 
@@ -909,7 +919,6 @@
 
       const targetSession = sessions.find(s => s.id === sc.sessionId);
 
-      // Strict Session & Mode Isolation Guard
       if (!sc.sessionId || sc.sessionId !== activeSessionId || (targetSession && targetSession.mode !== activeMode)) {
         if (targetSession) {
           targetSession.messages.push({
@@ -987,7 +996,6 @@
       appendChat("system-agent", "🛑 Autonomous cycle terminated by user.");
     }
 
-    // --- TIME & WEATHER NATIVE IMPLEMENTATIONS ---
     function agentGetTime(timezone = "America/New_York") {
       try {
         const now = new Date();
@@ -1016,9 +1024,8 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}%
-- Wind Speed: ${cur.wind_speed_10m} km/h
+- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1155,9 +1162,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
+        return `HTTP Request failed (Status ${res.status}):${res.data}`;
       }
-      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1358,7 +1365,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1530,7 +1537,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from ${repo}!`);
+        alert(`Successfully pulled ${path} from${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1585,7 +1592,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to ${repo}!`);
+        alert(`Successfully pushed ${targetPath} to${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -1682,9 +1689,13 @@
     }
 
     function onUserChangeProvider() {
+      const provider = document.getElementById("provider-select").value;
+      const keyInput = document.getElementById("api-key-input");
+      keyInput.value = localStorage.getItem(`omni_key_${provider}`) || "";
+      
       const current = getActiveSession();
       if (current) {
-        current.selectedProvider = document.getElementById("provider-select").value;
+        current.selectedProvider = provider;
         current.selectedModel = "";
         saveSessions();
       }
@@ -2097,7 +2108,6 @@
             modelSelect.appendChild(opt);
           });
 
-          // Priority: Saved Session Model -> gemini-pro-latest -> first model
           if (current?.selectedModel && models.includes(current.selectedModel)) {
             modelSelect.value = current.selectedModel;
           } else if (models.includes("gemini-pro-latest")) {
@@ -2401,12 +2411,21 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       }
 
       if (!prompt && !attachedImage) return;
-      if (!key || !model) return alert("Please connect an API key first.");
+
+      if (!key) {
+        appendChat("system-agent", `⚠️ No API Key found for provider [${provider}]. Enter your key at the top and click Connect!`);
+        return;
+      }
+      if (!model) {
+        appendChat("system-agent", `⚠️ No model selected. Click Connect to discover available models for [${provider}].`);
+        return;
+      }
       if (!current) return;
 
       isGenerating = true;
       const userMessageObj = { role: "user", text: prompt, img: attachedImage?.dataUrl || null };
       current.messages.push(userMessageObj);
+      saveSessions();
       appendChat("user", prompt, attachedImage?.dataUrl);
       promptInput.value = "";
 
@@ -2679,7 +2698,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
-        // Persistent 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const taskId = `task_bg_${Date.now()}`;
@@ -2728,7 +2746,9 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           statusDot.className = "status-dot active";
           statusText.innerText = "⚠️ API Error";
         }
-        loadingMsg.innerText = "⚠️ " + errorMsg;
+        if (loadingMsg) {
+          loadingMsg.innerHTML = `<span style="color:var(--danger)">⚠️ ${errorMsg}</span>`;
+        }
       } finally {
         isGenerating = false;
         activeAbortController = null;
@@ -2737,6 +2757,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
     function formatChatText(text) {
       if (!text) return "";
+      try {
+        if (typeof marked !== "undefined" && marked.parse) {
+          return marked.parse(text);
+        }
+      } catch(e) {}
+
       let cleaned = text.replace(/\*\*(\[.*?\]\(.*?\))\*\*/g, '$1');
       let safe = cleaned
         .replace(/&/g, "&amp;")
@@ -2753,8 +2779,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const msg = document.createElement("div");
       msg.className = `msg ${role}`;
       
-      if (role === "assistant" || role === "system-agent") {
+      if (role === "assistant") {
         msg.innerHTML = formatChatText(text);
+      } else if (role === "system-agent") {
+        msg.innerText = text;
       } else {
         msg.innerText = text;
       }
