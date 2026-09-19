@@ -2270,6 +2270,11 @@
       const schedulesContext = JSON.stringify(agentSchedules, null, 2);
 
       const fallbackProtocol = `
+PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
+- Different platforms (e.g. Moltbook, Aibook, custom APIs) have distinct endpoints, API schemas, and credentials.
+- NEVER mix credentials or endpoints between platforms.
+- If multiple service instruction files exist (e.g., "moltbook_skill.md" vs "aibook_skill.md"), match the exact filename to the target platform before executing any HTTP request.
+
 AUTONOMOUS RETRIEVAL & MISSING CONTEXT RULES:
 - NEVER guess, hallucinate, or say you lack information if an available tool or memory key can find it.
 - If the user asks about prior context, preferences, credentials, or historical project data not in the current files, check [AVAILABLE LONG-TERM MEMORY KEYS] and immediately call:
@@ -2608,7 +2613,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
-              // Auto-cleanup any temporary handoff task associated with this run
               cleanupTempSchedules();
             } else if (tool.action === "remove_temp_schedules") {
               const removed = cleanupTempSchedules(tool.id || null);
@@ -2669,8 +2673,19 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const content = await agentWebFetch(tool.url);
               
               if (!content.startsWith("Failed to fetch")) {
-                let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
-                if (!inferredName.includes(".")) inferredName += ".txt";
+                let parsedUrl;
+                try { parsedUrl = new URL(tool.url); } catch(e) {}
+                
+                let rawName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
+                if (!rawName.includes(".")) rawName += ".txt";
+
+                // Disambiguate generic files across services
+                const genericNames = ["skill.md", "heartbeat.md", "rules.md", "rules.txt", "config.json", "api.md"];
+                let inferredName = rawName;
+                if (parsedUrl && genericNames.includes(rawName.toLowerCase())) {
+                  const hostPrefix = parsedUrl.hostname.split(".")[0].replace(/[^a-zA-Z0-9_-]/g, "");
+                  inferredName = `${hostPrefix}_${rawName}`;
+                }
                 
                 current.files[inferredName] = content;
                 activeFileName = inferredName;
@@ -2679,8 +2694,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 loadFileEditor();
                 renderSandboxPreview();
 
-                appendChat("system-agent", `💾 Auto-Saved full document directly to workspace: "${inferredName}" (${content.length} bytes)`);
-                autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously with the next step.`;
+                appendChat("system-agent", `💾 Auto-Saved document to workspace: "${inferredName}" (${content.length} bytes)`);
+                autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously. Generic files are isolated with a domain prefix.`;
               } else {
                 appendChat("system-agent", `⚠️ Fetch notice: ${content}`);
               }
