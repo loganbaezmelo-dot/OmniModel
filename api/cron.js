@@ -126,6 +126,11 @@ ${currentFilesContext}
 [AVAILABLE LONG-TERM MEMORY KEYS]:
 ${JSON.stringify(availableMemoryKeys)}
 
+PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
+- Different platforms (e.g. Moltbook, Aibook, custom APIs) have entirely distinct endpoints, API schemas, and credentials.
+- NEVER mix credentials or endpoints between platforms.
+- If multiple service instruction files exist (e.g., "moltbook_skill.md" vs "aibook_skill.md"), match the exact filename to the target platform before executing any HTTP request.
+
 AUTONOMOUS DECISION RULES:
 1. NEVER guess or hallucinate if an available tool or memory key can answer the prompt.
 2. If asked about prior session history, preferences, or credentials not present in files, call:
@@ -180,7 +185,7 @@ AVAILABLE TOOL ACTIONS:
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
 
-9. Remove Temporary Step Handoff Schedules:
+9. Remove Temporary Continuation Schedules:
 \`\`\`tool_call
 {"action": "remove_temp_schedules"}
 \`\`\`
@@ -347,7 +352,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   const tool = JSON.parse(tc[1]);
                   if (tool.action === "finish") {
                     taskDone = true;
-                    // Auto cleanup temporary handoff task if that's what triggered this run
                     if (sc.id.startsWith("task_bg_")) {
                       schedules = schedules.filter(s => s.id !== sc.id);
                     }
@@ -413,10 +417,26 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
                   } else if (tool.action === "web_fetch" && tool.url) {
                     const content = await agentWebFetch(tool.url);
-                    let inferredName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
-                    if (!inferredName.includes(".")) inferredName += ".txt";
-                    userFiles[inferredName] = content;
-                    autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously with the next step.`;
+                    if (!content.startsWith("Failed to fetch")) {
+                      let parsedUrl;
+                      try { parsedUrl = new URL(tool.url); } catch(e) {}
+
+                      let rawName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
+                      if (!rawName.includes(".")) rawName += ".txt";
+
+                      // Disambiguate generic files across domains
+                      const genericNames = ["skill.md", "heartbeat.md", "rules.md", "rules.txt", "config.json", "api.md"];
+                      let inferredName = rawName;
+                      if (parsedUrl && genericNames.includes(rawName.toLowerCase())) {
+                        const hostPrefix = parsedUrl.hostname.split(".")[0].replace(/[^a-zA-Z0-9_-]/g, "");
+                        inferredName = `${hostPrefix}_${rawName}`;
+                      }
+
+                      userFiles[inferredName] = content;
+                      autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously. Generic files are isolated with a domain prefix.`;
+                    } else {
+                      autoFollowUpPrompt = `[Fetch notice]: ${content}`;
+                    }
                   } else if (tool.action === "http_request" && tool.url) {
                     const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
                     autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
