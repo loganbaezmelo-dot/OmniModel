@@ -2597,15 +2597,22 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         current.messages.push({ role: "assistant", text: reply });
 
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
+        let parsedPlan = null;
         if (planMatch && planMatch[1]) {
           try {
-            renderAgentPlan(JSON.parse(planMatch[1]));
+            parsedPlan = JSON.parse(planMatch[1]);
+            renderAgentPlan(parsedPlan);
           } catch(e) {}
         }
 
         let autoFollowUpPrompt = "";
         let agentExplicitFinished = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
+
+        // Auto-Kickstart: if the agent planned but called no tools, force Step 1
+        if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
+          autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
+        }
 
         for (const tc of toolCalls) {
           try {
