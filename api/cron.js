@@ -127,7 +127,7 @@ ${currentFilesContext}
 ${JSON.stringify(availableMemoryKeys)}
 
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
-- Different platforms (e.g. Moltbook, Aibook, custom APIs) have entirely distinct endpoints, API schemas, and credentials.
+- Different platforms (e.g. Moltbook, Aibook, custom APIs) have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
 - If multiple service instruction files exist (e.g., "moltbook_skill.md" vs "aibook_skill.md"), match the exact filename to the target platform before executing any HTTP request.
 
@@ -345,7 +345,16 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
               let autoFollowUpPrompt = "";
               const planMatch = lastReply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
+              let parsedPlan = null;
+              if (planMatch && planMatch[1]) {
+                try { parsedPlan = JSON.parse(planMatch[1]); } catch(e) {}
+              }
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
+
+              // Auto-Kickstart: if the agent planned but invoked no tools, force Step 1
+              if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
+                autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
+              }
 
               for (const tc of toolCalls) {
                 try {
