@@ -470,7 +470,6 @@
         <span>Sync Status: <strong id="kv-sync-status" style="color:var(--text);">Not Synced</strong></span>
       </div>
 
-      <!-- 🔑 Base64 Backup & Restore Section -->
       <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
         <button class="icon-btn" style="width: 100%; font-size: 11px;" onclick="copyOmniBase64Key()">📋 Copy Account Key (Base64)</button>
         <div style="display: flex; gap: 4px;">
@@ -2707,7 +2706,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         let agentExplicitFinished = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-        // Auto-Kickstart: if the agent planned but called no tools, force Step 1
+        // Auto-kickstart if the agent planned but invoked no tools
         if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
           autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
         }
@@ -2765,9 +2764,11 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             } else if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
               appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
+              autoFollowUpPrompt = `[CDN Injected]: '${tool.library}' has been added to the document head. Proceed immediately with the next step in your plan.`;
             } else if (tool.action === "create_file" && tool.filename) {
               agentCreateFile(tool.filename, tool.content || "");
               appendChat("system-agent", `📁 Tool: Created file '${tool.filename}'`);
+              autoFollowUpPrompt = `[File Created]: '${tool.filename}' created in workspace. Proceed immediately with writing its code or moving to the next step.`;
             } else if (tool.action === "web_search" && tool.query) {
               appendChat("system-agent", `🔍 Searching web: "${tool.query}"...`);
               const results = await agentWebSearch(tool.query);
@@ -2784,7 +2785,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 let rawName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
                 if (!rawName.includes(".")) rawName += ".txt";
 
-                // Disambiguate generic files across services
                 const genericNames = ["skill.md", "heartbeat.md", "rules.md", "rules.txt", "config.json", "api.md"];
                 let inferredName = rawName;
                 if (parsedUrl && genericNames.includes(rawName.toLowerCase())) {
@@ -2853,7 +2853,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
-        // Persistent 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const taskId = `task_bg_${Date.now()}`;
