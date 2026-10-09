@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Omni-Model Multi-Studio</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="[https://cdn.jsdelivr.net/npm/marked/marked.min.js](https://cdn.jsdelivr.net/npm/marked/marked.min.js)"></script>
   <style>
     :root {
       --bg: #0f1117;
@@ -480,7 +480,7 @@
     </div>
 
     <div class="sidebar-section" id="sidebar-gh-section">
-      <h4>GitHub Sync (Direct Git) <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
+      <h4>GitHub Sync (Direct Git) <a href="[https://github.com/settings/tokens?type=beta](https://github.com/settings/tokens?type=beta)" target="_blank" style="color:var(--accent); text-decoration:none;">Get Token ↗</a></h4>
       <div class="gh-inputs">
         <input type="password" id="gh-token" placeholder="GitHub PAT (repo scope)" oninput="saveGhConfig()">
         <input type="text" id="gh-repo" placeholder="owner/repo" oninput="saveGhConfig()">
@@ -575,7 +575,7 @@
         <span id="status-indicator" class="status-dot"></span>
         <span id="status-text">Disconnected</span>
       </div>
-      <a id="get-key-link" class="get-key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Get Gemini API Key ↗</a>
+      <a id="get-key-link" class="get-key-link" href="[https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)" target="_blank" rel="noopener noreferrer">Get Gemini API Key ↗</a>
     </div>
   </header>
 
@@ -694,19 +694,19 @@
     };
 
     const CDN_TAGS = {
-      tailwind: '<script src="https://cdn.tailwindcss.com"><\/script>',
-      lucide: '<script src="https://unpkg.com/lucide@latest"><\/script>',
-      fontawesome: '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">',
-      alpine: '<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"><\/script>',
-      chartjs: '<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>'
+      tailwind: '<script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"><\/script>',
+      lucide: '<script src="[https://unpkg.com/lucide@latest](https://unpkg.com/lucide@latest)"><\/script>',
+      fontawesome: '<link rel="stylesheet" href="[https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css](https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css)">',
+      alpine: '<script defer src="[https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js](https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js)"><\/script>',
+      chartjs: '<script src="[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)"><\/script>'
     };
 
     const KEY_LINKS = {
-      gemini: { text: "Get Gemini API Key ↗", url: "https://aistudio.google.com/app/apikey" },
-      openai: { text: "Get OpenAI API Key ↗", url: "https://platform.openai.com/api-keys" },
-      claude: { text: "Get Claude API Key ↗", url: "https://console.anthropic.com/settings/keys" },
-      openrouter: { text: "Get OpenRouter Key ↗", url: "https://openrouter.ai/keys" },
-      groq: { text: "Get Groq API Key ↗", url: "https://console.groq.com/keys" }
+      gemini: { text: "Get Gemini API Key ↗", url: "[https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)" },
+      openai: { text: "Get OpenAI API Key ↗", url: "[https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)" },
+      claude: { text: "Get Claude API Key ↗", url: "[https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)" },
+      openrouter: { text: "Get OpenRouter Key ↗", url: "[https://openrouter.ai/keys](https://openrouter.ai/keys)" },
+      groq: { text: "Get Groq API Key ↗", url: "[https://console.groq.com/keys](https://console.groq.com/keys)" }
     };
 
     let sessions = JSON.parse(localStorage.getItem("omni_sessions") || "[]");
@@ -964,7 +964,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
       return true;
     }
 
@@ -1129,14 +1129,14 @@
 
     async function agentGetWeather(location = "London") {
       try {
-        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+        const geoRes = await fetch(`[https://geocoding-api.open-meteo.com/v1/search?name=$](https://geocoding-api.open-meteo.com/v1/search?name=$){encodeURIComponent(location)}&count=1&language=en&format=json`);
         if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
         const geoData = await geoRes.json();
         if (!geoData.results || !geoData.results.length) {
           return `Location "${location}" not found.`;
         }
         const { latitude, longitude, name, admin1, country } = geoData.results[0];
-        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+        const weatherRes = await fetch(`[https://api.open-meteo.com/v1/forecast?latitude=$](https://api.open-meteo.com/v1/forecast?latitude=$){latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
         if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
         const wData = await weatherRes.json();
         const cur = wData.current;
@@ -1191,8 +1191,8 @@
       } catch (directErr) {}
 
       const publicProxies = [
-        url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+        url => `[https://corsproxy.io/?$](https://corsproxy.io/?$){encodeURIComponent(url)}`,
+        url => `[https://api.allorigins.win/get?url=$](https://api.allorigins.win/get?url=$){encodeURIComponent(url)}`
       ];
 
       for (let proxyFn of publicProxies) {
@@ -1241,7 +1241,7 @@
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
-        const ddgJsonUrl = `https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`;
+        const ddgJsonUrl = `[https://api.duckduckgo.com/?q=$](https://api.duckduckgo.com/?q=$){encoded}&format=json&no_html=1&skip_disambig=1`;
         
         const res = await callBackendProxy(ddgJsonUrl, "GET");
         if (res.ok) {
@@ -1260,7 +1260,7 @@
           } catch(e) {}
         }
 
-        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=3&namespace=0&format=json&origin=*`);
+        const wikiRes = await fetch(`[https://en.wikipedia.org/w/api.php?action=opensearch&search=$](https://en.wikipedia.org/w/api.php?action=opensearch&search=$){encoded}&limit=3&namespace=0&format=json&origin=*`);
         const wikiData = await wikiRes.json();
         if (wikiData && wikiData[1] && wikiData[1].length) {
           let results = [];
@@ -1636,7 +1636,7 @@
       statusText.innerText = `Pulling ${path}...`;
 
       try {
-        const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        const res = await fetch(`[https://api.github.com/repos/$](https://api.github.com/repos/$){repo}/contents/${path}`, {
           headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
         });
         const data = await res.json();
@@ -1681,7 +1681,7 @@
 
       try {
         let targetSha = null;
-        const checkRes = await fetch(`https://api.github.com/repos/${repo}/contents/${targetPath}`, {
+        const checkRes = await fetch(`[https://api.github.com/repos/$](https://api.github.com/repos/$){repo}/contents/${targetPath}`, {
           headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github+json" }
         });
         if (checkRes.ok) {
@@ -1694,7 +1694,7 @@
         const bodyPayload = { message: commitMsg, content: encodedContent };
         if (targetSha) bodyPayload.sha = targetSha;
 
-        const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${targetPath}`, {
+        const putRes = await fetch(`[https://api.github.com/repos/$](https://api.github.com/repos/$){repo}/contents/${targetPath}`, {
           method: "PUT",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -1929,7 +1929,7 @@
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>
+            <script src="[https://cdn.jsdelivr.net/npm/marked/marked.min.js](https://cdn.jsdelivr.net/npm/marked/marked.min.js)"><\/script>
             <style>
               body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.7; padding: 24px 18px; max-width: 740px; margin: 0 auto; color: #1e293b; background: #fff; }
               h1,h2,h3 { color: #0f172a; margin-top: 1.4em; }
@@ -1956,7 +1956,7 @@
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+            <script src="[https://cdn.jsdelivr.net/npm/chart.js](https://cdn.jsdelivr.net/npm/chart.js)"><\/script>
             <style>
               body { font-family: sans-serif; padding: 18px; background: #fafafa; color: #111; }
               .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
@@ -2196,7 +2196,7 @@
         let models = [];
 
         if (provider === "gemini") {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+          const res = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models?key=$](https://generativelanguage.googleapis.com/v1beta/models?key=$){key}`);
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           
@@ -2234,7 +2234,7 @@
           }
 
         } else if (provider === "openai") {
-          const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${key}` } });
+          const res = await fetch("[https://api.openai.com/v1/models](https://api.openai.com/v1/models)", { headers: { "Authorization": `Bearer ${key}` } });
           const data = await res.json();
           if (data.error) throw new Error(data.error.message);
           models = data.data.map(m => m.id).filter(id => id.toLowerCase().includes("gpt")).sort((a, b) => {
@@ -2251,7 +2251,7 @@
           if (target) modelSelect.value = target;
 
         } else if (provider === "claude") {
-          const res = await fetch("https://api.anthropic.com/v1/models", {
+          const res = await fetch("[https://api.anthropic.com/v1/models](https://api.anthropic.com/v1/models)", {
             headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
           });
           const data = await res.json();
@@ -2268,7 +2268,7 @@
           if (target) modelSelect.value = target;
 
         } else if (provider === "openrouter") {
-          const res = await fetch("https://openrouter.ai/api/v1/models", {
+          const res = await fetch("[https://openrouter.ai/api/v1/models](https://openrouter.ai/api/v1/models)", {
             headers: {
               "Authorization": `Bearer ${key}`,
               "HTTP-Referer": window.location.origin,
@@ -2324,7 +2324,7 @@
           if (target) modelSelect.value = target;
 
         } else if (provider === "groq") {
-          const res = await fetch("https://api.groq.com/openai/v1/models", {
+          const res = await fetch("[https://api.groq.com/openai/v1/models](https://api.groq.com/openai/v1/models)", {
             headers: { "Authorization": `Bearer ${key}` }
           });
           const data = await res.json();
@@ -2370,39 +2370,36 @@
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
 - Different platforms have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
-- Match file names explicitly before executing API actions.
+- Match filenames explicitly to prevent cross-service leaks.
+
+TEACHING & EXAMPLES WRAPPER PROTOCOL:
+- CRITICAL: When teaching the user, showing syntax, illustrating tutorial steps, or discussing JSON or tool schemas WITHOUT wanting to actually execute them right now, enclose the code in:
+\`\`\`example_snippet
+{"action": "...", ...}
+\`\`\`
+NEVER use \`\`\`tool_call or \`\`\`filepath: for illustrative or explanatory examples!
 
 LINE-BASED FILE EDITING PROTOCOL:
-- To inspect code with line numbers, call "read_file_lines".
-- To modify parts of existing files instead of overwriting the whole file, use "edit_file_lines" specifying startLine and endLine (1-indexed).
+- Inspect code with "read_file_lines" and surgically patch with "edit_file_lines".
 
 AUTONOMOUS RETRIEVAL & MISSING CONTEXT RULES:
-- NEVER guess, hallucinate, or say you lack information if an available tool or memory key can find it.
-- If the user asks about prior context, preferences, credentials, or historical project data not in the current files, check [AVAILABLE LONG-TERM MEMORY KEYS] and immediately call:
-  \`\`\`tool_call
-  {"action": "read_longterm_memory", "key": "<key_name>"}
-  \`\`\`
-- TEMPORARY SCHEDULE CLEANUP: Whenever you finish a background continuation task (task IDs starting with "task_bg_"), or if you notice unwanted temporary handoff schedules, invoke:
-  \`\`\`tool_call
-  {"action": "remove_temp_schedules"}
-  \`\`\`
-  This deletes leftover step-break loops while keeping permanent schedules and heartbeats untouched.
-- If the request refers to real-time events, documentation, public URLs, or APIs not present in the workspace, immediately invoke \`web_search\`, \`web_fetch\`, \`get_time\`, or \`get_weather\`.
-- Proactively retrieve the needed info first, then complete the user request in the subsequent step.`;
+- NEVER guess or hallucinate if an available tool or memory key can answer the prompt.
+- Check [AVAILABLE LONG-TERM MEMORY KEYS] and call "read_longterm_memory" if needed.
+- Clean temporary step handoff tasks using "remove_temp_schedules".`;
 
       const commonTools = `
-AVAILABLE TOOL ACTIONS:
+AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 1. Multi-Step Plan:
 \`\`\`agent_plan
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Read File Lines (View with numbered lines):
+2. Read File Lines (View with line numbers):
 \`\`\`tool_call
 {"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
-3. Edit Specific Lines (Partial replace):
+3. Edit Specific Lines:
 \`\`\`tool_call
 {"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
 \`\`\`
@@ -2419,12 +2416,12 @@ AVAILABLE TOOL ACTIONS:
 
 6. Web Page / Documentation Fetch:
 \`\`\`tool_call
-{"action": "web_fetch", "url": "https://example.com/file.md"}
+{"action": "web_fetch", "url": "[https://example.com/file.md](https://example.com/file.md)"}
 \`\`\`
 
 7. HTTP Request:
 \`\`\`tool_call
-{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+{"action": "http_request", "method": "POST", "url": "[https://api.example.com](https://api.example.com)", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
 \`\`\`
 
 8. Explicit Goal Complete:
@@ -2591,7 +2588,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (attachedImage) {
                 parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
               }
-              const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+              const res = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${key}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ contents: [{ role: "user", parts }] }),
@@ -2622,9 +2619,9 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
             } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
               const endpoint = 
-                provider === "groq" ? "https://api.groq.com/openai/v1/chat/completions" :
-                provider === "openrouter" ? "https://openrouter.ai/api/v1/chat/completions" :
-                "https://api.openai.com/v1/chat/completions";
+                provider === "groq" ? "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)" :
+                provider === "openrouter" ? "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)" :
+                "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)";
 
               const headers = {
                 "Content-Type": "application/json",
@@ -2666,7 +2663,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   source: { type: "base64", media_type: attachedImage.mimeType, data: attachedImage.base64 }
                 });
               }
-              const res = await fetch("https://api.anthropic.com/v1/messages", {
+              const res = await fetch("[https://api.anthropic.com/v1/messages](https://api.anthropic.com/v1/messages)", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -2865,15 +2862,17 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           }
         }
 
-        const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
+        // STRICT FILE UPDATE REGEX: ONLY triggers if explicitly preceded by filepath:
+        const fileBlockRegex = /```filepath:([^\s\n]+)\s*([\s\S]*?)```/g;
         let matched;
         let codeUpdated = false;
 
         while ((matched = fileBlockRegex.exec(reply)) !== null) {
-          const targetPath = matched[1] || activeFileName;
-          const codeBody = matched[3].trim();
+          const targetPath = matched[1];
+          const codeBody = matched[2].trim();
 
-          if (matched[0].includes("agent_plan") || matched[0].includes("tool_call")) continue;
+          // Ignored if it's an example or plan
+          if (!targetPath || targetPath.includes("agent_plan") || targetPath.includes("tool_call") || targetPath.includes("example_snippet")) continue;
 
           if (codeBody.length > 5) {
             captureSnapshot();
