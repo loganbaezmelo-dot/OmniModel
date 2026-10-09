@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -964,7 +964,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
       return true;
     }
 
@@ -2368,9 +2368,13 @@
 
       const fallbackProtocol = `
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
-- Different platforms (e.g. Moltbook, Aibook, custom APIs) have distinct endpoints, API schemas, and credentials.
+- Different platforms have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
-- If multiple service instruction files exist (e.g., "moltbook_skill.md" vs "aibook_skill.md"), match the exact filename to the target platform before executing any HTTP request.
+- Match file names explicitly before executing API actions.
+
+LINE-BASED FILE EDITING PROTOCOL:
+- To inspect code with line numbers, call "read_file_lines".
+- To modify parts of existing files instead of overwriting the whole file, use "edit_file_lines" specifying startLine and endLine (1-indexed).
 
 AUTONOMOUS RETRIEVAL & MISSING CONTEXT RULES:
 - NEVER guess, hallucinate, or say you lack information if an available tool or memory key can find it.
@@ -2393,61 +2397,67 @@ AVAILABLE TOOL ACTIONS:
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Web Search:
+2. Read File Lines (View with numbered lines):
 \`\`\`tool_call
-{"action": "web_search", "query": "search query here"}
+{"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
-3. Web Page / Documentation Fetch:
+3. Edit Specific Lines (Partial replace):
 \`\`\`tool_call
-{"action": "web_fetch", "url": "https://example.com/file.md"}
+{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
 \`\`\`
 
-4. HTTP Request (APIs, Webhooks, Actions):
-\`\`\`tool_call
-{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
-\`\`\`
-
-5. File Creation:
+4. Full File Creation / Overwrite:
 \`\`\`tool_call
 {"action": "create_file", "filename": "filename.ext", "content": "..."}
 \`\`\`
 
-6. Explicit Goal Complete (Use this when your objective is finished):
+5. Web Search:
+\`\`\`tool_call
+{"action": "web_search", "query": "search query here"}
+\`\`\`
+
+6. Web Page / Documentation Fetch:
+\`\`\`tool_call
+{"action": "web_fetch", "url": "https://example.com/file.md"}
+\`\`\`
+
+7. HTTP Request:
+\`\`\`tool_call
+{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+\`\`\`
+
+8. Explicit Goal Complete:
 \`\`\`tool_call
 {"action": "finish", "message": "Objective completed successfully."}
 \`\`\`
 
-7. Save to Long-Term Memory (Persistent across ALL General Agent chats):
-\`\`\`tool_call
-{"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
-\`\`\`
-Or copy an entire file directly to long-term memory:
-\`\`\`tool_call
-{"action": "save_to_longterm_memory", "from_file": "notes.txt"}
-\`\`\`
-
-8. Read Specific Long-Term Memory (On-demand recall):
+9. Read Specific Long-Term Memory:
 \`\`\`tool_call
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
 
-9. Remove Temporary Continuation Schedules:
+10. Save to Long-Term Memory:
+\`\`\`tool_call
+{"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
+\`\`\`
+
+11. Remove Temporary Continuation Schedules:
 \`\`\`tool_call
 {"action": "remove_temp_schedules"}
 \`\`\`
 
-10. Set Autonomous Recurring Cloud/In-Tab Schedule:
+12. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
 \`\`\`
 
-11. Get Current Time & Date:
+13. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-12. Get Live Weather:
+14. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\``;
@@ -2486,7 +2496,7 @@ B,20
 User custom instructions: ${customRules}
 Active workspace file: "${activeFileName}"
 
-PRIMARY WORKSPACE FILES (PRIORITIZE THESE FILES OVER OLD MEMORIES):
+PRIMARY WORKSPACE FILES:
 ${currentFilesContext}
 
 [AVAILABLE LONG-TERM MEMORY KEYS]:
@@ -2499,7 +2509,6 @@ ${schedulesContext}
 
 ${commonTools}
 
-Whenever you are asked to register a recurring routine or scheduled check, use the 'set_schedule' tool action so it registers for both in-tab execution and cloud background cron!
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
 
@@ -2510,13 +2519,13 @@ All Available Files:
 ${currentFilesContext}
 ${fallbackProtocol}${commonTools}
 
-13. Autonomous CDN Injection:
+15. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-14. Code Updates:
+16. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2706,7 +2715,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         let agentExplicitFinished = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-        // Auto-kickstart if the agent planned but invoked no tools
+        // Auto-kickstart if plan was created but no tools invoked
         if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
           autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
         }
@@ -2718,9 +2727,41 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
               cleanupTempSchedules();
+
+            } else if (tool.action === "read_file_lines" && tool.filename) {
+              const fileContent = current.files[tool.filename] || "";
+              const lines = fileContent.split("\n");
+              const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
+              const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
+              const numbered = lines.slice(start - 1, end).map((line, idx) => `${start + idx} | ${line}`).join("\n");
+              
+              appendChat("system-agent", `📄 Inspected lines ${start}-${end} of "${tool.filename}"`);
+              autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nReview these lines and proceed with your edits or next step.`;
+
+            } else if (tool.action === "edit_file_lines" && tool.filename) {
+              captureSnapshot();
+              const fileContent = current.files[tool.filename] || "";
+              const lines = fileContent.split("\n");
+              const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
+              const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
+              const newLines = (tool.newContent || "").split("\n");
+
+              lines.splice(start - 1, (end - start + 1), ...newLines);
+              current.files[tool.filename] = lines.join("\n");
+              
+              if (tool.filename === activeFileName) {
+                document.getElementById("code-editor").value = current.files[tool.filename];
+              }
+              saveSessions();
+              renderSandboxPreview();
+
+              appendChat("system-agent", `✏️ Replaced lines ${start}-${end} in "${tool.filename}"`);
+              autoFollowUpPrompt = `[Lines Replaced]: Lines ${start}-${end} of "${tool.filename}" updated successfully. Total lines now: ${lines.length}. Proceed with next step.`;
+
             } else if (tool.action === "remove_temp_schedules") {
               const removed = cleanupTempSchedules(tool.id || null);
               autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary continuation schedule(s). Proceed with your goal.`;
+
             } else if (tool.action === "get_time") {
               const timeRes = agentGetTime(tool.timezone || "America/New_York");
               appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
@@ -2732,6 +2773,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
+
             } else if (tool.action === "get_weather" && tool.location) {
               const weatherRes = await agentGetWeather(tool.location);
               appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
@@ -2743,13 +2785,16 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
+
             } else if (tool.action === "read_longterm_memory" && tool.key) {
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
               const memData = readLongTermMemoryKey(tool.key);
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
               autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed with your objective.`;
+
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
+
             } else if (tool.action === "save_to_longterm_memory") {
               let memContent = tool.content;
               let memKey = tool.key || "memory_" + Date.now();
@@ -2761,19 +2806,23 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 saveToLongTermMemory(memKey, memContent);
                 appendChat("system-agent", `🧠 Saved "${memKey}" into Persistent Long-Term Memory Vault!`);
               }
+
             } else if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
               appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
               autoFollowUpPrompt = `[CDN Injected]: '${tool.library}' has been added to the document head. Proceed immediately with the next step in your plan.`;
+
             } else if (tool.action === "create_file" && tool.filename) {
               agentCreateFile(tool.filename, tool.content || "");
               appendChat("system-agent", `📁 Tool: Created file '${tool.filename}'`);
               autoFollowUpPrompt = `[File Created]: '${tool.filename}' created in workspace. Proceed immediately with writing its code or moving to the next step.`;
+
             } else if (tool.action === "web_search" && tool.query) {
               appendChat("system-agent", `🔍 Searching web: "${tool.query}"...`);
               const results = await agentWebSearch(tool.query);
               appendChat("system-agent", `🌐 Results:\n${results}`);
               autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
+
             } else if (tool.action === "web_fetch" && tool.url) {
               appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
               const content = await agentWebFetch(tool.url);
@@ -2804,6 +2853,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               } else {
                 appendChat("system-agent", `⚠️ Fetch notice: ${content}`);
               }
+
             } else if (tool.action === "http_request" && tool.url) {
               appendChat("system-agent", `📡 HTTP ${tool.method || "GET"}: ${tool.url}...`);
               const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
@@ -2853,6 +2903,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
+        // 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const taskId = `task_bg_${Date.now()}`;
