@@ -351,7 +351,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
               }
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-              // Auto-Kickstart: if the agent planned but invoked no tools, force Step 1
+              // Auto-kickstart if plan was created but no tools invoked
               if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
                 autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
               }
@@ -421,6 +421,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     }
                   } else if (tool.action === "create_file" && tool.filename) {
                     userFiles[tool.filename] = tool.content || "";
+                    autoFollowUpPrompt = `[File Created]: '${tool.filename}' created. Proceed immediately with writing its code or moving to the next step.`;
                   } else if (tool.action === "web_search" && tool.query) {
                     const results = await agentWebSearch(tool.query);
                     autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
@@ -433,7 +434,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       let rawName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
                       if (!rawName.includes(".")) rawName += ".txt";
 
-                      // Disambiguate generic files across domains
                       const genericNames = ["skill.md", "heartbeat.md", "rules.md", "rules.txt", "config.json", "api.md"];
                       let inferredName = rawName;
                       if (parsedUrl && genericNames.includes(rawName.toLowerCase())) {
