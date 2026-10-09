@@ -120,29 +120,20 @@ export default async function handler(req, res) {
     return `You are an Unconstrained Autonomous Problem Solver executing on the background serverless cron worker.
 User custom instructions: ${customRules || ""}
 
-PRIMARY WORKSPACE FILES (PRIORITIZE THESE FILES OVER OLD MEMORIES):
+PRIMARY WORKSPACE FILES:
 ${currentFilesContext}
 
 [AVAILABLE LONG-TERM MEMORY KEYS]:
 ${JSON.stringify(availableMemoryKeys)}
 
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
-- Different platforms (e.g. Moltbook, Aibook, custom APIs) have distinct endpoints, API schemas, and credentials.
+- Different platforms have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
-- If multiple service instruction files exist (e.g., "moltbook_skill.md" vs "aibook_skill.md"), match the exact filename to the target platform before executing any HTTP request.
+- Match file names explicitly before executing API actions.
 
-AUTONOMOUS DECISION RULES:
-1. NEVER guess or hallucinate if an available tool or memory key can answer the prompt.
-2. If asked about prior session history, preferences, or credentials not present in files, call:
-   \`\`\`tool_call
-   {"action": "read_longterm_memory", "key": "<key_name>"}
-   \`\`\`
-3. TEMPORARY SCHEDULE CLEANUP: Whenever you complete a background task that resumed from an earlier 3-step break (task IDs starting with "task_bg_"), or if you notice unwanted temporary handoff schedules, invoke:
-   \`\`\`tool_call
-   {"action": "remove_temp_schedules"}
-   \`\`\`
-   This leaves permanent monitoring/heartbeat schedules untouched while deleting leftover continuation loops.
-4. When finished, call the "finish" tool action.
+LINE-BASED FILE EDITING PROTOCOL:
+- To inspect code with line numbers, call "read_file_lines".
+- To modify parts of existing files instead of overwriting the whole file, use "edit_file_lines" specifying startLine and endLine (1-indexed).
 
 AVAILABLE TOOL ACTIONS:
 1. Multi-Step Plan:
@@ -150,57 +141,67 @@ AVAILABLE TOOL ACTIONS:
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Web Search:
+2. Read File Lines (View with numbered lines):
 \`\`\`tool_call
-{"action": "web_search", "query": "search query here"}
+{"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
-3. Web Page / Documentation Fetch:
+3. Edit Specific Lines (Partial replace):
 \`\`\`tool_call
-{"action": "web_fetch", "url": "https://example.com/file.md"}
+{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
 \`\`\`
 
-4. HTTP Request (APIs, Webhooks, Actions):
-\`\`\`tool_call
-{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
-\`\`\`
-
-5. File Creation:
+4. Full File Creation / Overwrite:
 \`\`\`tool_call
 {"action": "create_file", "filename": "filename.ext", "content": "..."}
 \`\`\`
 
-6. Explicit Goal Complete:
+5. Web Search:
+\`\`\`tool_call
+{"action": "web_search", "query": "search query here"}
+\`\`\`
+
+6. Web Page / Documentation Fetch:
+\`\`\`tool_call
+{"action": "web_fetch", "url": "https://example.com/file.md"}
+\`\`\`
+
+7. HTTP Request:
+\`\`\`tool_call
+{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+\`\`\`
+
+8. Explicit Goal Complete:
 \`\`\`tool_call
 {"action": "finish", "message": "Objective completed successfully."}
 \`\`\`
 
-7. Save to Long-Term Memory:
-\`\`\`tool_call
-{"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
-\`\`\`
-
-8. Read Specific Long-Term Memory:
+9. Read Specific Long-Term Memory:
 \`\`\`tool_call
 {"action": "read_longterm_memory", "key": "memory_key"}
 \`\`\`
 
-9. Remove Temporary Continuation Schedules:
+10. Save to Long-Term Memory:
+\`\`\`tool_call
+{"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
+\`\`\`
+
+11. Remove Temporary Continuation Schedules:
 \`\`\`tool_call
 {"action": "remove_temp_schedules"}
 \`\`\`
 
-10. Set Autonomous Recurring Schedule:
+12. Set Autonomous Recurring Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your recurring task prompt."}
 \`\`\`
 
-11. Get Current Time & Date:
+13. Get Current Time & Date:
 \`\`\`tool_call
 {"action": "get_time", "timezone": "America/New_York"}
 \`\`\`
 
-12. Get Live Weather:
+14. Get Live Weather:
 \`\`\`tool_call
 {"action": "get_weather", "location": "Miami, FL"}
 \`\`\`
@@ -351,7 +352,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
               }
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-              // Auto-kickstart if plan was created but no tools invoked
               if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
                 autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
               }
@@ -364,6 +364,25 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     if (sc.id.startsWith("task_bg_")) {
                       schedules = schedules.filter(s => s.id !== sc.id);
                     }
+                  } else if (tool.action === "read_file_lines" && tool.filename) {
+                    const content = userFiles[tool.filename] || "";
+                    const lines = content.split("\n");
+                    const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
+                    const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
+                    const numbered = lines.slice(start - 1, end).map((line, idx) => `${start + idx} | ${line}`).join("\n");
+                    autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nProceed with your edits.`;
+
+                  } else if (tool.action === "edit_file_lines" && tool.filename) {
+                    const content = userFiles[tool.filename] || "";
+                    const lines = content.split("\n");
+                    const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
+                    const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
+                    const newLines = (tool.newContent || "").split("\n");
+
+                    lines.splice(start - 1, (end - start + 1), ...newLines);
+                    userFiles[tool.filename] = lines.join("\n");
+                    autoFollowUpPrompt = `[Lines Replaced]: Replaced lines ${start}-${end} in "${tool.filename}". Total lines now: ${lines.length}. Continue with next steps.`;
+
                   } else if (tool.action === "remove_temp_schedules") {
                     const beforeCount = schedules.length;
                     if (tool.id) {
