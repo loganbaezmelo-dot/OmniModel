@@ -39,14 +39,14 @@ export default async function handler(req, res) {
 
   async function agentGetWeather(location = "London") {
     try {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+      const geoRes = await fetch(`[https://geocoding-api.open-meteo.com/v1/search?name=$](https://geocoding-api.open-meteo.com/v1/search?name=$){encodeURIComponent(location)}&count=1&language=en&format=json`);
       if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
       const geoData = await geoRes.json();
       if (!geoData.results || !geoData.results.length) {
         return `Location "${location}" not found.`;
       }
       const { latitude, longitude, name, admin1, country } = geoData.results[0];
-      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+      const weatherRes = await fetch(`[https://api.open-meteo.com/v1/forecast?latitude=$](https://api.open-meteo.com/v1/forecast?latitude=$){latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
       if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
       const wData = await weatherRes.json();
       const cur = wData.current;
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
   async function agentWebSearch(query) {
     try {
       const encoded = encodeURIComponent(query);
-      const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`);
+      const ddgRes = await fetch(`[https://api.duckduckgo.com/?q=$](https://api.duckduckgo.com/?q=$){encoded}&format=json&no_html=1&skip_disambig=1`);
       if (ddgRes.ok) {
         const parsed = await ddgRes.json();
         let results = [];
@@ -126,27 +126,31 @@ ${currentFilesContext}
 [AVAILABLE LONG-TERM MEMORY KEYS]:
 ${JSON.stringify(availableMemoryKeys)}
 
-PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
-- Different platforms have distinct endpoints, API schemas, and credentials.
-- NEVER mix credentials or endpoints between platforms.
-- Match file names explicitly before executing API actions.
+PLATFORM & CREDENTIAL ISOLATION:
+- Match filenames explicitly to prevent cross-service leaks.
 
-LINE-BASED FILE EDITING PROTOCOL:
-- To inspect code with line numbers, call "read_file_lines".
-- To modify parts of existing files instead of overwriting the whole file, use "edit_file_lines" specifying startLine and endLine (1-indexed).
+TEACHING & EXAMPLES WRAPPER PROTOCOL:
+- CRITICAL: When teaching the user, showing examples, illustrating tutorial steps, or discussing JSON or tool schemas WITHOUT wanting to actually execute them right now, enclose the code in:
+\`\`\`example_snippet
+{"action": "...", ...}
+\`\`\`
+NEVER use \`\`\`tool_call or \`\`\`filepath: for illustrative or explanatory examples!
 
-AVAILABLE TOOL ACTIONS:
+LINE-BASED FILE EDITING:
+- Inspect with "read_file_lines" and surgically patch with "edit_file_lines".
+
+AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 1. Multi-Step Plan:
 \`\`\`agent_plan
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Read File Lines (View with numbered lines):
+2. Read File Lines (View with line numbers):
 \`\`\`tool_call
 {"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
-3. Edit Specific Lines (Partial replace):
+3. Edit Specific Lines:
 \`\`\`tool_call
 {"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
 \`\`\`
@@ -163,12 +167,12 @@ AVAILABLE TOOL ACTIONS:
 
 6. Web Page / Documentation Fetch:
 \`\`\`tool_call
-{"action": "web_fetch", "url": "https://example.com/file.md"}
+{"action": "web_fetch", "url": "[https://example.com/file.md](https://example.com/file.md)"}
 \`\`\`
 
 7. HTTP Request:
 \`\`\`tool_call
-{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+{"action": "http_request", "method": "POST", "url": "[https://api.example.com](https://api.example.com)", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
 \`\`\`
 
 8. Explicit Goal Complete:
@@ -214,7 +218,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
     while (retries >= 0) {
       try {
         if (provider === "gemini") {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+          const res = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -240,17 +244,17 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
         } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
           const endpoint = provider === "groq"
-            ? "https://api.groq.com/openai/v1/chat/completions"
+            ? "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)"
             : provider === "openrouter"
-            ? "https://openrouter.ai/api/v1/chat/completions"
-            : "https://api.openai.com/v1/chat/completions";
+            ? "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)"
+            : "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)";
 
           const headers = {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${key}`
           };
           if (provider === "openrouter") {
-            headers["HTTP-Referer"] = "https://omnimodel.vercel.app";
+            headers["HTTP-Referer"] = "[https://omnimodel.vercel.app](https://omnimodel.vercel.app)";
             headers["X-Title"] = "Omni-Model Studio";
           }
 
@@ -270,7 +274,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
           return data.choices?.[0]?.message?.content || "";
 
         } else if (provider === "claude") {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("[https://api.anthropic.com/v1/messages](https://api.anthropic.com/v1/messages)", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -352,6 +356,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
               }
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
+              // Auto-kickstart if plan was created but no tools invoked
               if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
                 autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
               }
@@ -472,12 +477,13 @@ Always continue executing autonomously until the final objective is fulfilled, t
                 } catch (tcErr) {}
               }
 
-              const fileBlockRegex = /```(?:filepath:([^\s\n]+)|([a-zA-Z]*))\s*([\s\S]*?)\s*```/g;
+              // STRICT PARSER: ONLY modify files if explicitly tagged with filepath:
+              const fileBlockRegex = /```filepath:([^\s\n]+)\s*([\s\S]*?)```/g;
               let match;
               while ((match = fileBlockRegex.exec(lastReply)) !== null) {
                 const target = match[1];
-                const content = match[3].trim();
-                if (target && !match[0].includes("agent_plan") && !match[0].includes("tool_call")) {
+                const content = match[2].trim();
+                if (target && !match[0].includes("agent_plan") && !match[0].includes("tool_call") && !match[0].includes("example_snippet")) {
                   userFiles[target] = content;
                 }
               }
