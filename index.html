@@ -469,6 +469,15 @@
         <span>User ID: <strong id="kv-user-id" style="color:#a5b4fc;">...</strong></span>
         <span>Sync Status: <strong id="kv-sync-status" style="color:var(--text);">Not Synced</strong></span>
       </div>
+
+      <!-- 🔑 Base64 Backup & Restore Section -->
+      <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+        <button class="icon-btn" style="width: 100%; font-size: 11px;" onclick="copyOmniBase64Key()">📋 Copy Account Key (Base64)</button>
+        <div style="display: flex; gap: 4px;">
+          <input type="text" id="restore-key-input" placeholder="Paste Base64 Key to Restore..." style="font-size: 11px; padding: 4px 6px; flex: 1;">
+          <button class="icon-btn" style="font-size: 11px; padding: 4px 8px; background: var(--accent);" onclick="restoreFromBase64Key()">Restore</button>
+        </div>
+      </div>
     </div>
 
     <div class="sidebar-section" id="sidebar-gh-section">
@@ -728,6 +737,96 @@
       return uid;
     }
 
+    function generateOmniBase64Key() {
+      const provider = document.getElementById("provider-select").value || "gemini";
+      const model = document.getElementById("model-select").value || "gemini-pro-latest";
+      const userId = getOrInitUserId();
+      
+      const rawString = `omnimodel-${model}-${provider}-${userId}`;
+      return btoa(rawString);
+    }
+
+    function copyOmniBase64Key() {
+      const token = generateOmniBase64Key();
+      navigator.clipboard.writeText(token).then(() => {
+        alert("Account key copied to clipboard:\n\n" + token);
+      }).catch(() => {
+        prompt("Copy your Base64 Account Key:", token);
+      });
+    }
+
+    async function restoreFromBase64Key() {
+      const input = document.getElementById("restore-key-input");
+      const b64 = input.value.trim();
+      if (!b64) return alert("Please paste a Base64 key first!");
+
+      try {
+        const decoded = atob(b64);
+        if (!decoded.startsWith("omnimodel-")) {
+          throw new Error("Invalid key prefix");
+        }
+
+        const payload = decoded.replace(/^omnimodel-/, "");
+        const parts = payload.split("-");
+
+        if (parts.length < 3) {
+          throw new Error("Malformed key format");
+        }
+
+        const userId = parts.pop();
+        const provider = parts.pop();
+        const model = parts.join("-");
+
+        localStorage.setItem("omni_user_id", userId);
+        document.getElementById("kv-user-id").innerText = userId;
+
+        const provSelect = document.getElementById("provider-select");
+        if (provSelect) {
+          provSelect.value = provider;
+          onUserChangeProvider();
+        }
+
+        await fetchModels(model);
+
+        const kvStatus = document.getElementById("kv-sync-status");
+        if (kvStatus) kvStatus.innerText = "Restoring Cloud Data...";
+
+        try {
+          const pullRes = await fetch(`/api/user_sync?userId=${encodeURIComponent(userId)}`);
+          if (pullRes.ok) {
+            const cloudData = await pullRes.json();
+            if (cloudData && cloudData.user) {
+              const u = cloudData.user;
+              if (u.rules) localStorage.setItem("omni_cursorrules", u.rules);
+              if (u.longterm_memory) localStorage.setItem("omni_general_longterm_memory", JSON.stringify(u.longterm_memory));
+              if (u.schedules) {
+                agentSchedules = u.schedules;
+                saveSchedules();
+              }
+              if (u.files) {
+                const current = getActiveSession();
+                if (current) {
+                  current.files = { ...current.files, ...u.files };
+                  saveSessions();
+                  renderFileTree();
+                  loadFileEditor();
+                  renderSandboxPreview();
+                }
+              }
+            }
+          }
+        } catch (pullErr) {}
+
+        input.value = "";
+        renderMemoryPreview();
+        renderSchedulesList();
+        appendChat("system-agent", `🔑 Account restored from backup token!\nUser ID: [${userId}]\nProvider: [${provider}]\nModel: [${model}]`);
+        alert("Restored successfully!");
+      } catch (err) {
+        alert("Failed to decode key: " + err.message);
+      }
+    }
+
     async function syncUserToVercelKV() {
       const userId = getOrInitUserId();
       const provider = document.getElementById("provider-select").value;
@@ -769,7 +868,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -821,7 +920,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -866,7 +965,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
       return true;
     }
 
@@ -1023,7 +1122,7 @@
           dateStyle: "full",
           timeStyle: "long"
         }).format(now);
-        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+        return `Current Date & Time (${timezone}): ${formatted} [ISO:${now.toISOString()}]`;
       } catch (e) {
         return `Error retrieving time for timezone "${timezone}": ${e.message}`;
       }
@@ -1043,9 +1142,8 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}%
-- Wind Speed: ${cur.wind_speed_10m} km/h
+- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
+- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1182,9 +1280,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
+        return `HTTP Request failed (Status ${res.status}):${res.data}`;
       }
-      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1385,7 +1483,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1557,7 +1655,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from ${repo}!`);
+        alert(`Successfully pulled ${path} from${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1612,7 +1710,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to ${repo}!`);
+        alert(`Successfully pushed ${targetPath} to${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
