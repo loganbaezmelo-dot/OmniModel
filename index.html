@@ -738,7 +738,7 @@
 
     function generateOmniBase64Key() {
       const provider = document.getElementById("provider-select").value || "gemini";
-      const model = document.getElementById("model-select").value || "gemini-3.1-flash-lite";
+      const model = document.getElementById("model-select").value || "gemini-pro-latest";
       const userId = getOrInitUserId();
       
       const rawString = `omnimodel-${model}-${provider}-${userId}`;
@@ -831,7 +831,7 @@
       const provider = document.getElementById("provider-select").value;
       const apiKey = document.getElementById("api-key-input").value.trim();
       const current = getActiveSession();
-      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-3.1-flash-lite";
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
       const statusEl = document.getElementById("kv-sync-status");
       const rules = localStorage.getItem("omni_cursorrules") || "";
 
@@ -1810,7 +1810,7 @@
         historyIdx: 0,
         messages: [],
         selectedProvider: "gemini",
-        selectedModel: "gemini-3.1-flash-lite"
+        selectedModel: "gemini-pro-latest"
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
@@ -1881,7 +1881,7 @@
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
       
-      // Clean up orphaned empty messages before displaying
+      // Filter out ghost empty messages
       current.messages = (current.messages || []).filter(m => (m.text && m.text.trim()) || m.img);
       current.messages.forEach(m => {
         appendChat(m.role, m.text, m.img || null, false);
@@ -1891,7 +1891,7 @@
       renderFileTree();
       loadFileEditor();
       renderSandboxPreview();
-      onProviderChange(current.selectedModel || "gemini-3.1-flash-lite");
+      onProviderChange(current.selectedModel || "gemini-pro-latest");
     }
 
     function renderSandboxPreview() {
@@ -2253,8 +2253,8 @@
             }
           });
 
-          if (!models.length) {
-            models = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.1-pro"];
+          if (!models.includes("gemini-pro-latest")) {
+            models.unshift("gemini-pro-latest");
           }
 
           modelSelect.innerHTML = "";
@@ -2267,7 +2267,7 @@
 
           const chosen = (preferredModel && models.includes(preferredModel)) ? preferredModel :
                          (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel :
-                         (models.find(m => m.includes("flash-lite") || m.includes("flash")) || models[0]);
+                         (models.includes("gemini-pro-latest") ? "gemini-pro-latest" : models[0]);
 
           modelSelect.value = chosen;
 
@@ -2579,7 +2579,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const provider = document.getElementById("provider-select").value;
       
       const current = getActiveSession();
-      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-3.1-flash-lite";
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
       
       const customRules = localStorage.getItem("omni_cursorrules") || "";
       const statusText = document.getElementById("status-text");
