@@ -1335,7 +1335,7 @@
 
     async function agentWebSearch(query) {
       try {
-        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim();
+        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
         const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await callBackendProxy(googleUrl, "GET");
@@ -2664,27 +2664,24 @@ ${schedulesContext}
 ${commonTools}
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. TARGETED IDEMPOTENCY & IDENTITY RULE:
-   - YOU (the AI assistant) are the autonomous agent. The human user chatting with you is your owner / operator.
-   - You are NEVER to address the user as the registered bot account.
-   - CROSS-PLATFORM ISOLATION: When the user asks for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
-   - If and ONLY if valid credentials for the EXACT requested platform already exist in memory:
-     State clearly: "My AI agent account is already registered as [name] on [platform]. Here is my claim URL and verification code if you would like to claim/verify me." Then provide the key details and call:
+1. TARGET LOCK & MANDATORY PRE-CHECK:
+   - Identify the EXACT service requested by the user (e.g. "Moltbook").
+   - NEVER switch services! If the user asks for Moltbook, you are FORBIDDEN from registering on ClawHub, OpenClaw, or other services.
+   - Look at [AVAILABLE LONG-TERM MEMORY KEYS]. If a key matches the user's requested platform (e.g. "moltbook_summary"):
+     You MUST call "read_longterm_memory" BEFORE performing web searches.
+   - If valid credentials already exist in memory for that exact platform:
+     State: "My AI agent account is already registered as [name] on [platform]. Here is my claim URL and verification code if you would like to claim/verify me." Then call:
      \`\`\`tool_call
      {"action": "finish", "message": "Account already registered and active."}
      \`\`\`
-   - For all other requests (asking general questions, greetings, weather, coding, or OTHER platforms):
-     Respond to or execute the user's specific request normally without triggering false finish calls or making accounts.
-2. WEB SEARCH QUERY DISCIPLINE:
-   - When searching for a platform, use short, clean search queries (e.g. "clawhub", "clawhub platform", or "clawhub ai").
-   - NEVER combine multiple keywords into a single query like "clawhub sign up api register agent skill md" because it ruins search results.
+   - NEVER check or report keys from different platforms.
+2. CONCISE WEB SEARCH DISCIPLINE:
+   - Keep searches to 1 to 3 words (e.g. "clawhub", "clawhub platform"). Do NOT stuff sentences or combine unrelated keywords.
 3. ONBOARDING SEQUENCE:
-   - Step A: Use a concise web_search (e.g. "clawhub") or web_fetch on the direct domain (e.g. "https://clawhub.com" or "https://clawhub.ai").
-   - Step B: Inspect the fetched content or check endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
-   - Step C: Once the skill or API instructions are fetched, save or read them immediately.
-   - Step D: Identify the required registration/action endpoint, headers, and JSON body.
-   - Step E: Use "http_request" to execute the POST/action directly.
-4. Completion Rule: Never call "finish" until the real registration or target API request for the requested platform has returned its response payload, UNLESS targeted credentials for that exact service already exist.
+   - Step A: Fetch docs or use clean search.
+   - Step B: Extract API endpoints and payload schemas.
+   - Step C: Call "http_request" directly.
+4. Completion Rule: Never call "finish" until the real network request for the requested platform returns successfully, unless credentials for that exact service are already saved.
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
@@ -2752,6 +2749,15 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
       const currentFilesContext = JSON.stringify(current.files, null, 2);
       const systemPrompt = getModeSystemPrompt(customRules, currentFilesContext);
 
+      const memKeys = Object.keys(getLongTermMemory());
+      const promptLower = prompt.toLowerCase();
+      const matchedVaultKey = memKeys.find(k => promptLower.includes(k.split("_")[0]));
+
+      let extraDirectPrompt = "";
+      if (matchedVaultKey && (promptLower.includes("make") || promptLower.includes("create") || promptLower.includes("register") || promptLower.includes("account"))) {
+        extraDirectPrompt = `\n\n[PRIORITY NOTICE]: A memory key "${matchedVaultKey}" matching the requested platform already exists in [AVAILABLE LONG-TERM MEMORY KEYS]. Call {"action": "read_longterm_memory", "key": "${matchedVaultKey}"} immediately BEFORE performing web searches.`;
+      }
+
       appendChat("assistant", `🤖 Agent working on [${model}]...`);
       const historyDiv = document.getElementById("chat-history");
       const loadingMsg = historyDiv.lastElementChild;
@@ -2766,7 +2772,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         while (retries >= 0) {
           try {
             if (provider === "gemini") {
-              const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt }];
+              const parts = [{ text: systemPrompt + "\n\nUser Request: " + prompt + extraDirectPrompt }];
               if (attachedImage) {
                 parts.push({ inline_data: { mime_type: attachedImage.mimeType, data: attachedImage.base64 } });
               }
@@ -2818,7 +2824,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 headers["X-Title"] = "Omni-Model Studio";
               }
 
-              const content = [{ type: "text", text: prompt }];
+              const content = [{ type: "text", text: prompt + extraDirectPrompt }];
               if (attachedImage) {
                 content.push({ 
                   type: "image_url", 
@@ -2841,7 +2847,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               break;
 
             } else if (provider === "claude") {
-              const content = [{ type: "text", text: prompt }];
+              const content = [{ type: "text", text: prompt + extraDirectPrompt }];
               if (attachedImage) {
                 content.push({
                   type: "image",
@@ -2856,7 +2862,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
-                  model: model,
+                  model,
                   system: systemPrompt,
                   max_tokens: 4096,
                   messages: [{ role: "user", content }]
@@ -3277,4 +3283,4 @@ You have ALREADY verified your memory and fetched prerequisite files. Do NOT cal
     }
   </script>
 </body>
-  </html>
+</html>
