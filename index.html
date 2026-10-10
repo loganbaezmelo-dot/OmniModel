@@ -738,7 +738,7 @@
 
     function generateOmniBase64Key() {
       const provider = document.getElementById("provider-select").value || "gemini";
-      const model = document.getElementById("model-select").value || "gemini-pro-latest";
+      const model = document.getElementById("model-select").value || "gemini-3.1-flash-lite";
       const userId = getOrInitUserId();
       
       const rawString = `omnimodel-${model}-${provider}-${userId}`;
@@ -831,7 +831,7 @@
       const provider = document.getElementById("provider-select").value;
       const apiKey = document.getElementById("api-key-input").value.trim();
       const current = getActiveSession();
-      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-3.1-flash-lite";
       const statusEl = document.getElementById("kv-sync-status");
       const rules = localStorage.getItem("omni_cursorrules") || "";
 
@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -1276,14 +1276,14 @@
             const parsed = typeof jsonRes.data === "string" ? JSON.parse(jsonRes.data) : jsonRes.data;
             let results = [];
             if (parsed.AbstractText) {
-              results.push(`• ${parsed.Heading || query}: ${parsed.AbstractText} (${parsed.AbstractURL})`);
+              results.push(`• **${parsed.Heading || query}**: ${parsed.AbstractText} (${parsed.AbstractURL})`);
             }
             if (parsed.RelatedTopics && parsed.RelatedTopics.length) {
               parsed.RelatedTopics.slice(0, 4).forEach(t => {
                 if (t.Text && t.FirstURL) results.push(`• ${t.Text} (${t.FirstURL})`);
               });
             }
-            if (results.length) return results.join("\n");
+            if (results.length) return results.join("\n\n");
           } catch(e) {}
         }
 
@@ -1810,7 +1810,7 @@
         historyIdx: 0,
         messages: [],
         selectedProvider: "gemini",
-        selectedModel: "gemini-pro-latest"
+        selectedModel: "gemini-3.1-flash-lite"
       };
       sessions.unshift(newSession);
       activeSessionId = newSession.id;
@@ -1880,6 +1880,9 @@
 
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
+      
+      // Clean up orphaned empty messages before displaying
+      current.messages = (current.messages || []).filter(m => (m.text && m.text.trim()) || m.img);
       current.messages.forEach(m => {
         appendChat(m.role, m.text, m.img || null, false);
       });
@@ -1888,7 +1891,7 @@
       renderFileTree();
       loadFileEditor();
       renderSandboxPreview();
-      onProviderChange(current.selectedModel || "gemini-pro-latest");
+      onProviderChange(current.selectedModel || "gemini-3.1-flash-lite");
     }
 
     function renderSandboxPreview() {
@@ -2241,16 +2244,17 @@
             if (
               m.supportedGenerationMethods?.includes("generateContent") &&
               !name.includes("gemma") &&
-              !name.includes("2.5") &&
+              !name.includes("1.0") &&
               !name.includes("1.5") &&
-              !name.includes("2.0")
+              !name.includes("2.0") &&
+              !name.includes("2.5")
             ) {
               models.push(name);
             }
           });
 
-          if (!models.includes("gemini-pro-latest")) {
-            models.unshift("gemini-pro-latest");
+          if (!models.length) {
+            models = ["gemini-3.1-flash-lite", "gemini-3.5-flash-lite", "gemini-3.1-pro"];
           }
 
           modelSelect.innerHTML = "";
@@ -2261,13 +2265,11 @@
             modelSelect.appendChild(opt);
           });
 
-          if (current?.selectedModel && models.includes(current.selectedModel)) {
-            modelSelect.value = current.selectedModel;
-          } else if (models.includes("gemini-pro-latest")) {
-            modelSelect.value = "gemini-pro-latest";
-          } else {
-            modelSelect.value = models[0];
-          }
+          const chosen = (preferredModel && models.includes(preferredModel)) ? preferredModel :
+                         (current?.selectedModel && models.includes(current.selectedModel)) ? current.selectedModel :
+                         (models.find(m => m.includes("flash-lite") || m.includes("flash")) || models[0]);
+
+          modelSelect.value = chosen;
 
         } else if (provider === "openai") {
           const res = await fetch("https://api.openai.com/v1/models", { headers: { "Authorization": `Bearer ${key}` } });
@@ -2569,13 +2571,15 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
     }
 
     async function sendMessage() {
+      if (isGenerating) return;
+
       const promptInput = document.getElementById("prompt-input");
       const prompt = promptInput.value.trim();
       const key = document.getElementById("api-key-input").value.trim();
       const provider = document.getElementById("provider-select").value;
       
       const current = getActiveSession();
-      const model = document.getElementById("model-select").value || current?.selectedModel;
+      const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-3.1-flash-lite";
       
       const customRules = localStorage.getItem("omni_cursorrules") || "";
       const statusText = document.getElementById("status-text");
@@ -2647,13 +2651,16 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (isOverloaded) {
                 if (retries > 0) {
                   retries--;
-                  loadingMsg.innerText = `⚠️ Google servers busy. Retrying with ${model} in 3s... (${retries} left)`;
+                  if (loadingMsg) loadingMsg.innerText = `⚠️ Google servers busy. Retrying with ${model} in 3s... (${retries} left)`;
                   await new Promise(r => setTimeout(r, 3000));
                   continue;
                 }
               }
 
               if (data.error) throw new Error(data.error.message);
+              if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+                throw new Error("Empty candidate payload returned from API.");
+              }
               reply = data.candidates[0].content.parts[0].text;
               break;
 
@@ -2683,7 +2690,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
               const res = await fetch(endpoint, {
                 method: "POST",
-                headers,
+                headers: headers,
                 body: JSON.stringify({
                   model: model,
                   messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
@@ -2708,7 +2715,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 headers: {
                   "Content-Type": "application/json",
                   "x-api-key": key,
-                  "anthropic-version": "2023-06-01"
+                  "anthropic-version": "2023-06-01",
+                  "anthropic-dangerous-direct-browser-access": "true"
                 },
                 body: JSON.stringify({
                   model: model,
@@ -2735,7 +2743,14 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
         clearTimeout(timeoutId);
         clearAttachedImage();
-        loadingMsg.innerHTML = formatChatText(reply);
+
+        if (!reply || !reply.trim()) {
+          throw new Error("Model returned an empty response.");
+        }
+
+        if (loadingMsg) {
+          loadingMsg.innerHTML = formatChatText(reply);
+        }
         current.messages.push({ role: "assistant", text: reply });
 
         const planMatch = reply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
@@ -2986,9 +3001,15 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           statusDot.className = "status-dot active";
           statusText.innerText = "⚠️ API Error";
         }
+
+        const safeErrHtml = `<span style="color:var(--danger)">⚠️ ${errorMsg}</span>`;
         if (loadingMsg) {
-          loadingMsg.innerHTML = `<span style="color:var(--danger)">⚠️ ${errorMsg}</span>`;
+          loadingMsg.innerHTML = safeErrHtml;
+        } else {
+          appendChat("assistant", `⚠️ ${errorMsg}`);
         }
+        current.messages.push({ role: "assistant", text: `⚠️ ${errorMsg}` });
+        saveSessions();
       } finally {
         isGenerating = false;
         activeAbortController = null;
@@ -2996,7 +3017,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
     }
 
     function formatChatText(text) {
-      if (!text) return "";
+      if (!text || typeof text !== "string") return "";
       try {
         if (typeof marked !== "undefined" && marked.parse) {
           return marked.parse(text);
@@ -3015,6 +3036,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
     }
 
     function appendChat(role, text, img, shouldScroll = true) {
+      if ((!text || !String(text).trim()) && !img) return;
+
       const history = document.getElementById("chat-history");
       const msg = document.createElement("div");
       msg.className = `msg ${role}`;
