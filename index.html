@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -964,7 +964,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
       return true;
     }
 
@@ -1241,50 +1241,17 @@
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
-        // 1. Target Google Search via our proxy
-        const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
-        const res = await callBackendProxy(googleUrl, "GET");
-
-        if (res.ok && typeof res.data === "string" && res.data.length > 500) {
-          const doc = new DOMParser().parseFromString(res.data, "text/html");
-          const results = [];
-
-          // Standard Google search result card containers
-          const resultBlocks = doc.querySelectorAll("div.MjjYud, div.g, div.tF2C2");
-
-          resultBlocks.forEach(block => {
-            if (results.length >= 5) return;
-
-            const titleEl = block.querySelector("h3");
-            const linkEl = block.querySelector("a[href^='http']");
-            const snippetEl = block.querySelector("div.VwiC3b, div[style*='-webkit-line-clamp'], span.aCOpRe") || 
-                              block.querySelector("div[data-snf], div[data-sncf]");
-
-            const title = titleEl ? titleEl.textContent.trim() : "";
-            const href = linkEl ? linkEl.getAttribute("href") : "";
-            const snippet = snippetEl ? snippetEl.textContent.trim() : "";
-
-            if (title && href && !href.includes("google.com/search")) {
-              results.push(`• **${title}**: ${snippet \vert{}\vert{} "No description provided."} (${href})`);
-            }
-          });
-
-          if (results.length > 0) {
-            return results.join("\n\n");
-          }
-        }
-
-        // 2. Fallback to DuckDuckGo HTML Lite
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
-        const ddgRes = await callBackendProxy(ddgUrl, "GET");
-        if (ddgRes.ok && typeof ddgRes.data === "string") {
-          const doc = new DOMParser().parseFromString(ddgRes.data, "text/html");
+        const res = await callBackendProxy(ddgUrl, "GET");
+
+        if (res.ok && typeof res.data === "string" && res.data.includes("result__snippet")) {
+          const doc = new DOMParser().parseFromString(res.data, "text/html");
           const links = doc.querySelectorAll(".result__body");
-          const ddgResults = [];
+          const results = [];
 
           links.forEach((el, i) => {
             if (i >= 5) return;
-            const titleEl = el.querySelector(".result__title");
+            const titleEl = el.querySelector(".result__title .result__snippet") || el.querySelector(".result__title");
             const snippetEl = el.querySelector(".result__snippet");
             const urlEl = el.querySelector(".result__url");
 
@@ -1293,16 +1260,48 @@
             const rawUrl = urlEl ? urlEl.getAttribute("href") || urlEl.textContent.trim() : "";
 
             if (title && snippet) {
-              ddgResults.push(`• **${title}**: ${snippet} (${rawUrl})`);
+              results.push(`• **${title}**: ${snippet} (${rawUrl})`);
             }
           });
 
-          if (ddgResults.length > 0) {
-            return ddgResults.join("\n\n");
+          if (results.length > 0) {
+            return results.join("\n\n");
           }
         }
 
-        return `No direct search matches found for "${query}".`;
+        const ddgJsonUrl = `https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`;
+        const jsonRes = await callBackendProxy(ddgJsonUrl, "GET");
+        if (jsonRes.ok) {
+          try {
+            const parsed = typeof jsonRes.data === "string" ? JSON.parse(jsonRes.data) : jsonRes.data;
+            let results = [];
+            if (parsed.AbstractText) {
+              results.push(`• **${parsed.Heading || query}**: ${parsed.AbstractText} (${parsed.AbstractURL})`);
+            }
+            if (parsed.RelatedTopics && parsed.RelatedTopics.length) {
+              parsed.RelatedTopics.slice(0, 4).forEach(t => {
+                if (t.Text && t.FirstURL) results.push(`• ${t.Text} (${t.FirstURL})`);
+              });
+            }
+            if (results.length) return results.join("\n\n");
+          } catch(e) {}
+        }
+
+        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=4&namespace=0&format=json&origin=*`);
+        if (wikiRes.ok) {
+          const wikiData = await wikiRes.json();
+          if (wikiData && wikiData[1] && wikiData[1].length) {
+            let results = [];
+            for (let i = 0; i < wikiData[1].length; i++) {
+              if (wikiData[2][i]) {
+                results.push(`• **${wikiData[1][i]}**: ${wikiData[2][i]} (${wikiData[3][i]})`);
+              }
+            }
+            if (results.length) return results.join("\n\n");
+          }
+        }
+
+        return `No web results found for "${query}".`;
       } catch (err) {
         return `Search error: ${err.message}`;
       }
@@ -2691,7 +2690,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
               const res = await fetch(endpoint, {
                 method: "POST",
-                headers,
+                headers: headers,
                 body: JSON.stringify({
                   model: model,
                   messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
@@ -2716,7 +2715,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 headers: {
                   "Content-Type": "application/json",
                   "x-api-key": key,
-                  "anthropic-version": "2023-06-01"
+                  "anthropic-version": "2023-06-01",
+                  "anthropic-dangerous-direct-browser-access": "true"
                 },
                 body: JSON.stringify({
                   model: model,
