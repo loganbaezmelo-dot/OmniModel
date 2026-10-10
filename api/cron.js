@@ -98,37 +98,49 @@ export default async function handler(req, res) {
   async function agentWebSearch(query) {
     try {
       const encoded = encodeURIComponent(query);
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
-      const res = await fetch(ddgUrl, {
+      const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
+      const res = await fetch(googleUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9"
         }
       });
 
       if (res.ok) {
         const html = await res.text();
-        const snippetMatches = [...html.matchAll(/class="result__snippet[^"]*">([\s\S]*?)<\/a>/g)];
-        let results = [];
-        for (let i = 0; i < Math.min(snippetMatches.length, 5); i++) {
-          const snippet = snippetMatches[i][1].replace(/<[^>]+>/g, "").trim();
-          if (snippet) {
-            results.push(`• ${snippet}`);
+        const blockRegex = /<div class="(?:MjjYud|g|tF2C2)"[\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>[\s\S]*?<a[^>]+href="(https?:\/\/[^"]+)"[\s\S]*?(?:<div class="VwiC3b[^"]*"[^>]*>([\s\S]*?)<\/div>|)/g;
+        let match;
+        const results = [];
+
+        while ((match = blockRegex.exec(html)) !== null && results.length < 5) {
+          const title = match[1].replace(/<[^>]+>/g, "").trim();
+          const href = match[2];
+          const snippet = match[3] ? match[3].replace(/<[^>]+>/g, "").trim() : "No description.";
+          if (title && href && !href.includes("google.com/search")) {
+            results.push(`• **${title}**: ${snippet} (${href})`);
           }
         }
         if (results.length) return results.join("\n\n");
       }
 
-      const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`);
-      if (ddgRes.ok) {
-        const parsed = await ddgRes.json();
-        let results = [];
-        if (parsed.AbstractText) results.push(`• ${parsed.Heading || query}: ${parsed.AbstractText} (${parsed.AbstractURL})`);
-        if (parsed.RelatedTopics && parsed.RelatedTopics.length) {
-          parsed.RelatedTopics.slice(0, 4).forEach(t => {
-            if (t.Text && t.FirstURL) results.push(`• ${t.Text} (${t.FirstURL})`);
-          });
+      // Fallback: DuckDuckGo HTML
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
+      const ddgRes = await fetch(ddgUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        if (results.length) return results.join("\n");
+      });
+
+      if (ddgRes.ok) {
+        const ddgHtml = await ddgRes.text();
+        const snippetMatches = [...ddgHtml.matchAll(/class="result__snippet[^"]*">([\s\S]*?)<\/a>/g)];
+        let results = [];
+        for (let i = 0; i < Math.min(snippetMatches.length, 5); i++) {
+          const snippet = snippetMatches[i][1].replace(/<[^>]+>/g, "").trim();
+          if (snippet) results.push(`• ${snippet}`);
+        }
+        if (results.length) return results.join("\n\n");
       }
 
       return `No direct search matches found for "${query}".`;
