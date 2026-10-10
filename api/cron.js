@@ -308,12 +308,12 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
         } else if (provider === "claude") {
           const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
             headers: {
               "Content-Type": "application/json",
               "x-api-key": key,
               "anthropic-version": "2023-06-01"
             },
+            method: "POST",
             body: JSON.stringify({
               model,
               system: systemPrompt,
@@ -371,9 +371,10 @@ Always continue executing autonomously until the final objective is fulfilled, t
           let hops = 0;
           let taskDone = false;
           let lastReply = "";
+          let lastToolExecutedSummary = "";
 
-          while (hops < 4 && !taskDone) {
-            hops++;
+          // Run up to 6 execution hops per cron cycle
+          while (hops < 6 && !taskDone) {
             const currentFilesContext = JSON.stringify(userFiles, null, 2);
             const availableMemoryKeys = Object.keys(userMemory);
             const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, availableMemoryKeys);
@@ -382,6 +383,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
               lastReply = await callProviderModel(provider, model, apiKey, systemPrompt, currentPrompt);
 
               let autoFollowUpPrompt = "";
+              let burnedRealHop = false;
               const planMatch = lastReply.match(/```agent_plan\s*([\s\S]*?)\s*```/);
               let parsedPlan = null;
               if (planMatch && planMatch[1]) {
@@ -391,13 +393,26 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
               if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
                 autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
+                burnedRealHop = true;
+                lastToolExecutedSummary = `Initialized agent plan with ${parsedPlan.length} steps.`;
               }
 
               for (const tc of toolCalls) {
                 try {
                   const tool = JSON.parse(tc[1]);
+
+                  // Passive/inspection tools DO NOT burn an execution hop
+                  if (
+                    tool.action !== "remove_temp_schedules" && 
+                    tool.action !== "read_longterm_memory" && 
+                    tool.action !== "get_time"
+                  ) {
+                    burnedRealHop = true;
+                  }
+
                   if (tool.action === "finish") {
                     taskDone = true;
+                    lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
                     if (sc.id.startsWith("task_bg_")) {
                       schedules = schedules.filter(s => s.id !== sc.id);
                     }
@@ -408,6 +423,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
                     const numbered = lines.slice(start - 1, end).map((line, idx) => `${start + idx} | ${line}`).join("\n");
                     autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nProceed with your edits.`;
+                    lastToolExecutedSummary = `Read lines ${start}-${end} of ${tool.filename}.`;
 
                   } else if (tool.action === "edit_file_lines" && tool.filename) {
                     const content = userFiles[tool.filename] || "";
@@ -419,6 +435,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     lines.splice(start - 1, (end - start + 1), ...newLines);
                     userFiles[tool.filename] = lines.join("\n");
                     autoFollowUpPrompt = `[Lines Replaced]: Replaced lines ${start}-${end} in "${tool.filename}". Total lines now: ${lines.length}. Continue with next steps.`;
+                    lastToolExecutedSummary = `Patched lines ${start}-${end} in ${tool.filename}.`;
 
                   } else if (tool.action === "remove_temp_schedules") {
                     const beforeCount = schedules.length;
@@ -429,6 +446,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     }
                     const removed = beforeCount - schedules.length;
                     autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary handoff schedule(s). Proceed.`;
+                    lastToolExecutedSummary = `Cleaned up ${removed} temp continuation schedules.`;
+
                   } else if (tool.action === "get_time") {
                     const timeRes = await agentGetTime(tool.timezone || "America/New_York");
                     if (planMatch && planMatch[1]) {
@@ -438,6 +457,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
+                    lastToolExecutedSummary = `Retrieved system time (${tool.timezone || "America/New_York"}).`;
+
                   } else if (tool.action === "get_weather" && tool.location) {
                     const weatherRes = await agentGetWeather(tool.location);
                     if (planMatch && planMatch[1]) {
@@ -447,10 +468,14 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
+                    lastToolExecutedSummary = `Checked weather for ${tool.location}.`;
+
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
                     const content = rec ? (typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)) : `Key "${tool.key}" not found in long-term memory.`;
-                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nProceed with your objective.`;
+                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nProceed directly with your objective using this information. Do not re-fetch it.`;
+                    lastToolExecutedSummary = `Read memory key "${tool.key}".`;
+
                   } else if (tool.action === "set_schedule" && tool.id) {
                     const existingIdx = schedules.findIndex(s => s.id === tool.id);
                     const scheduleObj = {
@@ -465,6 +490,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     };
                     if (existingIdx !== -1) schedules[existingIdx] = scheduleObj;
                     else schedules.push(scheduleObj);
+                    lastToolExecutedSummary = `Registered schedule "${tool.id}".`;
+
                   } else if (tool.action === "save_to_longterm_memory") {
                     let memContent = tool.content;
                     let memKey = tool.key || "memory_" + Date.now();
@@ -475,12 +502,18 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     if (memContent) {
                       userMemory[memKey] = { updatedAt: new Date().toISOString(), content: memContent };
                     }
+                    lastToolExecutedSummary = `Saved long-term memory vault key "${memKey}".`;
+
                   } else if (tool.action === "create_file" && tool.filename) {
                     userFiles[tool.filename] = tool.content || "";
                     autoFollowUpPrompt = `[File Created]: '${tool.filename}' created. Proceed immediately with writing its code or moving to the next step.`;
+                    lastToolExecutedSummary = `Created/Updated workspace file "${tool.filename}".`;
+
                   } else if (tool.action === "web_search" && tool.query) {
                     const results = await agentWebSearch(tool.query);
                     autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
+                    lastToolExecutedSummary = `Searched web for "${tool.query}".`;
+
                   } else if (tool.action === "web_fetch" && tool.url) {
                     const content = await agentWebFetch(tool.url);
                     if (!content.startsWith("Failed to fetch")) {
@@ -499,12 +532,15 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
                       userFiles[inferredName] = content;
                       autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously. Generic files are isolated with a domain prefix.`;
+                      lastToolExecutedSummary = `Fetched and stored "${tool.url}" as "${inferredName}".`;
                     } else {
                       autoFollowUpPrompt = `[Fetch notice]: ${content}`;
+                      lastToolExecutedSummary = `Attempted fetch of "${tool.url}".`;
                     }
                   } else if (tool.action === "http_request" && tool.url) {
                     const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
                     autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
+                    lastToolExecutedSummary = `HTTP ${tool.method || "GET"} to "${tool.url}".`;
                   }
                 } catch (tcErr) {}
               }
@@ -519,8 +555,19 @@ Always continue executing autonomously until the final objective is fulfilled, t
                 }
               }
 
+              if (burnedRealHop) {
+                hops++;
+              }
+
               if (autoFollowUpPrompt && !taskDone) {
-                currentPrompt = autoFollowUpPrompt;
+                // Carry rich context payload into next hop
+                currentPrompt = `[CONTINUE TASK - RESUMPTION PAYLOAD]
+Last Completed Action: ${lastToolExecutedSummary || "Completed intermediate step."}
+Next Immediate Step:
+${autoFollowUpPrompt}
+
+CRITICAL DIRECTIVE:
+You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memory" or "remove_temp_schedules". Directly execute the concrete action required above.`;
                 await new Promise(r => setTimeout(r, 2000));
               } else {
                 taskDone = true;
