@@ -167,6 +167,18 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - NEVER claim an action is finished simply because you read documentation, summarized a memory key, or outlined steps.
 - When the task requires creating an account, posting data, interacting with a platform, or calling an external service, you MUST inspect instructions (such as skill.md or docs), find the exact endpoint, build the payload, and execute the actual "http_request" or network tool action.
 - You are STRICTLY FORBIDDEN from calling the "finish" tool action until the live execution request has been submitted and returned a real response. Summarizing a service does NOT complete an action on it.
+- ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST clean all temporary background tasks using "remove_temp_schedules" to prevent duplicate registration loops.
+
+AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
+1. When asked to interact with or create an account on a platform (e.g. Moltbook, or any external service):
+   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page (e.g. "https://moltbook.com").
+   - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
+   - Step C: Once the skill or API instructions are fetched, save or read them immediately.
+   - Step D: Identify the required registration/action endpoint, headers, and JSON body.
+   - Step E: Use "http_request" to execute the POST/action directly.
+2. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
+3. Post-Registration Cleanup: Clean temporary continuation schedules immediately after receiving credentials.
+4. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -319,6 +331,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
               "x-api-key": key,
               "anthropic-version": "2023-06-01"
             },
+            method: "POST",
             body: JSON.stringify({
               model,
               system: systemPrompt,
@@ -418,9 +431,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   if (tool.action === "finish") {
                     taskDone = true;
                     lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
-                    if (sc.id.startsWith("task_bg_")) {
-                      schedules = schedules.filter(s => s.id !== sc.id);
-                    }
+                    // Automatically clean all temporary background tasks
+                    schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
                   } else if (tool.action === "read_file_lines" && tool.filename) {
                     const content = userFiles[tool.filename] || "";
                     const lines = content.split("\n");
@@ -478,7 +490,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
                     const content = rec ? (typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)) : `Key "${tool.key}" not found in long-term memory.`;
-                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nProceed directly with your objective using this information. Do not re-fetch it.`;
+                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nDIRECTIVE: You now have the context. Do NOT read this memory key or any placeholder file again. Immediately search for or fetch the platform's website (e.g. via web_search or web_fetch to find /skill.md) to discover the API endpoints and execute the request.`;
                     lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
                   } else if (tool.action === "set_schedule" && tool.id) {
@@ -506,6 +518,10 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     }
                     if (memContent) {
                       userMemory[memKey] = { updatedAt: new Date().toISOString(), content: memContent };
+                      // Auto-clean temporary continuation schedules when saving final output
+                      if (typeof memContent === "string" && (memContent.includes("api_key") || memContent.includes("registered") || memContent.includes("token"))) {
+                        schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                      }
                     }
                     lastToolExecutedSummary = `Saved long-term memory vault key "${memKey}".`;
 
@@ -544,7 +560,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     }
                   } else if (tool.action === "http_request" && tool.url) {
                     const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
-                    autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
+                    autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action. If this fulfilled the objective (e.g. account created or message sent), save any credentials to long-term memory, clean temporary schedules, and finish.`;
                     lastToolExecutedSummary = `HTTP ${tool.method || "GET"} to "${tool.url}".`;
                   }
                 } catch (tcErr) {}
@@ -571,7 +587,7 @@ Next Immediate Step:
 ${autoFollowUpPrompt}
 
 CRITICAL DIRECTIVE:
-You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memory" or "remove_temp_schedules". Directly execute the concrete action required above.`;
+You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memory". Directly execute the concrete network/API action required above. Once completed, clean temporary schedules immediately.`;
                 await new Promise(r => setTimeout(r, 2000));
               } else {
                 taskDone = true;
