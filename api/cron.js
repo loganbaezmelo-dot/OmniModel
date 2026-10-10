@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     }
   }
 
-  async function agentGetWeather(location = "London") {
+  async function agentGetWeather(location = "London", unit = "F") {
     try {
       const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
       if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
@@ -46,14 +46,20 @@ export default async function handler(req, res) {
         return `Location "${location}" not found.`;
       }
       const { latitude, longitude, name, admin1, country } = geoData.results[0];
-      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+      
+      const isFahrenheit = String(unit).toUpperCase().includes("F");
+      const tempQuery = isFahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
+      const tempSymbol = isFahrenheit ? "°F" : "°C";
+      const windSymbol = isFahrenheit ? "mph" : "km/h";
+
+      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m${tempQuery}&timezone=auto`);
       if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
       const wData = await weatherRes.json();
       const cur = wData.current;
       return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Temperature: ${cur.temperature_2m}${tempSymbol} (Feels like: ${cur.apparent_temperature}${tempSymbol})
 - Relative Humidity: ${cur.relative_humidity_2m}${"%"}
-- Wind Speed: ${cur.wind_speed_10m} km/h
+- Wind Speed: ${cur.wind_speed_10m} ${windSymbol}
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
     } catch (err) {
@@ -257,7 +263,7 @@ AVAILABLE TOOL ACTIONS:
 
 11. Save User Profile Details:
 \`\`\`tool_call
-{"action": "save_user_profile", "updates": {"location": "...", "timezone": "...", "role": "...", "projects": "..."}}
+{"action": "save_user_profile", "updates": {"location": "...", "timezone": "...", "tempUnit": "F", "role": "...", "projects": "..."}}
 \`\`\`
 
 12. Remove Temporary Continuation Schedules:
@@ -277,7 +283,7 @@ AVAILABLE TOOL ACTIONS:
 
 15. Get Live Weather:
 \`\`\`tool_call
-{"action": "get_weather", "location": "${userProfileContext?.location || "Miami, FL"}"}
+{"action": "get_weather", "location": "${userProfileContext?.location \vert{}\vert{} "Miami, FL"}", "unit": "${userProfileContext?.tempUnit || "F"}"}
 \`\`\`
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
@@ -500,7 +506,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
                   } else if (tool.action === "get_weather") {
                     const targetLoc = tool.location || userProfile.location || "Miami, FL";
-                    const weatherRes = await agentGetWeather(targetLoc);
+                    const targetUnit = tool.unit || userProfile.tempUnit || "F";
+                    const weatherRes = await agentGetWeather(targetLoc, targetUnit);
                     if (planMatch && planMatch[1]) {
                       autoFollowUpPrompt = `[Live Weather Data for "${targetLoc}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
                     } else {
@@ -508,7 +515,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
-                    lastToolExecutedSummary = `Checked weather for ${targetLoc}.`;
+                    lastToolExecutedSummary = `Checked weather for ${targetLoc} (${targetUnit}).`;
 
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
