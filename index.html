@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -964,7 +964,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
       return true;
     }
 
@@ -1106,6 +1106,7 @@
     function stopAutonomousCycle() {
       isAutoLooping = false;
       autonomousHopCount = 0;
+      renderAgentPlan(null);
       if (activeAbortController) {
         activeAbortController.abort();
       }
@@ -1121,7 +1122,7 @@
           dateStyle: "full",
           timeStyle: "long"
         }).format(now);
-        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+        return `Current Date & Time (${timezone}): ${formatted} [ISO:${now.toISOString()}]`;
       } catch (e) {
         return `Error retrieving time for timezone "${timezone}": ${e.message}`;
       }
@@ -1141,7 +1142,7 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
 - Relative Humidity: ${cur.relative_humidity_2m}${"%"}
 - Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
@@ -1310,9 +1311,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
+        return `HTTP Request failed (Status ${res.status}):${res.data}`;
       }
-      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1518,7 +1519,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1690,7 +1691,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from ${repo}!`);
+        alert(`Successfully pulled ${path} from${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1745,7 +1746,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to ${repo}!`);
+        alert(`Successfully pushed ${targetPath} to${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -1868,6 +1869,7 @@
 
     function loadSessionUI() {
       applyModeUIChrome();
+      renderAgentPlan(null);
       const current = getActiveSession();
       if (!current) {
         createNewSession();
@@ -2108,7 +2110,7 @@
         const logsContainer = document.getElementById("console-logs");
         const row = document.createElement("div");
         row.className = `log-item ${e.data.level}`;
-        row.innerText = `[${e.data.level.toUpperCase()}] ${e.data.text}`;
+        row.innerText = `[${e.data.level.toUpperCase()}]${e.data.text}`;
         logsContainer.appendChild(row);
         logsContainer.scrollTop = logsContainer.scrollHeight;
       }
@@ -2802,9 +2804,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
             if (tool.action === "finish") {
               agentExplicitFinished = true;
-              appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
+              renderAgentPlan(null);
+              appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message ?? "Done!"}`);
               cleanupTempSchedules();
-              lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
+              lastToolExecutedSummary = `Finished mission: ${tool.message ?? "Done"}`;
 
             } else if (tool.action === "read_file_lines" && tool.filename) {
               const fileContent = current.files[tool.filename] || "";
@@ -2890,7 +2893,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (memContent) {
                 saveToLongTermMemory(memKey, memContent);
                 appendChat("system-agent", `🧠 Saved "${memKey}" into Persistent Long-Term Memory Vault!`);
-                // Auto-clean temporary continuation schedules when saving final output
                 if (typeof memContent === "string" && (memContent.includes("api_key") || memContent.includes("registered") || memContent.includes("token"))) {
                   cleanupTempSchedules();
                 }
@@ -2999,7 +3001,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
-        // 6-step circuit breaker with rich context preservation
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 6) {
             const taskId = `task_bg_${Date.now()}`;
@@ -3034,6 +3035,7 @@ You have ALREADY verified your memory and fetched prerequisite files. Do NOT cal
             }
           }, 2500);
         } else {
+          renderAgentPlan(null);
           setLoopUI(false);
           autonomousHopCount = 0;
         }
