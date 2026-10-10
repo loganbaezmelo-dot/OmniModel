@@ -2712,8 +2712,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 headers: {
                   "Content-Type": "application/json",
                   "x-api-key": key,
-                  "anthropic-version": "2023-06-01",
-                  "anthropic-dangerous-direct-browser-access": "true"
+                  "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
                   model: model,
@@ -2762,18 +2761,19 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         let autoFollowUpPrompt = "";
         let agentExplicitFinished = false;
         let burnedRealHop = false;
+        let lastToolExecutedSummary = "";
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
         if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
           autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
           burnedRealHop = true;
+          lastToolExecutedSummary = `Initialized agent plan with ${parsedPlan.length} steps.`;
         }
 
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
 
-            // Administrative and inspection tools DO NOT burn an execution hop
             if (
               tool.action !== "remove_temp_schedules" && 
               tool.action !== "read_longterm_memory" && 
@@ -2786,6 +2786,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
               cleanupTempSchedules();
+              lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
 
             } else if (tool.action === "read_file_lines" && tool.filename) {
               const fileContent = current.files[tool.filename] || "";
@@ -2796,6 +2797,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               
               appendChat("system-agent", `📄 Inspected lines ${start}-${end} of "${tool.filename}"`);
               autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nReview these lines and proceed with your edits or next step.`;
+              lastToolExecutedSummary = `Read lines ${start}-${end} of ${tool.filename}.`;
 
             } else if (tool.action === "edit_file_lines" && tool.filename) {
               captureSnapshot();
@@ -2816,10 +2818,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
               appendChat("system-agent", `✏️ Replaced lines ${start}-${end} in "${tool.filename}"`);
               autoFollowUpPrompt = `[Lines Replaced]: Lines ${start}-${end} of "${tool.filename}" updated successfully. Total lines now: ${lines.length}. Proceed with next step.`;
+              lastToolExecutedSummary = `Patched lines ${start}-${end} in ${tool.filename}.`;
 
             } else if (tool.action === "remove_temp_schedules") {
               const removed = cleanupTempSchedules(tool.id || null);
               autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary continuation schedule(s). Proceed with your goal.`;
+              lastToolExecutedSummary = `Cleaned up ${removed} temp continuation schedules.`;
 
             } else if (tool.action === "get_time") {
               const timeRes = agentGetTime(tool.timezone || "America/New_York");
@@ -2832,6 +2836,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
+              lastToolExecutedSummary = `Retrieved system time (${tool.timezone || "America/New_York"}).`;
 
             } else if (tool.action === "get_weather" && tool.location) {
               const weatherRes = await agentGetWeather(tool.location);
@@ -2844,15 +2849,18 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
+              lastToolExecutedSummary = `Checked weather for ${tool.location}.`;
 
             } else if (tool.action === "read_longterm_memory" && tool.key) {
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
               const memData = readLongTermMemoryKey(tool.key);
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
               autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed directly with your objective using this information. Do not re-fetch it.`;
+              lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
+              lastToolExecutedSummary = `Registered schedule "${tool.id}".`;
 
             } else if (tool.action === "save_to_longterm_memory") {
               let memContent = tool.content;
@@ -2865,22 +2873,26 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 saveToLongTermMemory(memKey, memContent);
                 appendChat("system-agent", `🧠 Saved "${memKey}" into Persistent Long-Term Memory Vault!`);
               }
+              lastToolExecutedSummary = `Saved long-term memory vault key "${memKey}".`;
 
             } else if (tool.action === "inject_cdn" && tool.library) {
               injectCdn(tool.library, true);
               appendChat("system-agent", `⚡ Tool: Injected CDN '${tool.library}'`);
               autoFollowUpPrompt = `[CDN Injected]: '${tool.library}' has been added to the document head. Proceed immediately with the next step in your plan.`;
+              lastToolExecutedSummary = `Injected CDN library "${tool.library}".`;
 
             } else if (tool.action === "create_file" && tool.filename) {
               agentCreateFile(tool.filename, tool.content || "");
               appendChat("system-agent", `📁 Tool: Created file '${tool.filename}'`);
               autoFollowUpPrompt = `[File Created]: '${tool.filename}' created in workspace. Proceed immediately with writing its code or moving to the next step.`;
+              lastToolExecutedSummary = `Created/Updated workspace file "${tool.filename}".`;
 
             } else if (tool.action === "web_search" && tool.query) {
               appendChat("system-agent", `🔍 Searching web: "${tool.query}"...`);
               const results = await agentWebSearch(tool.query);
               appendChat("system-agent", `🌐 Results:\n${results}`);
               autoFollowUpPrompt = `[Web Search Results for "${tool.query}"]:\n${results}\n\nBased on this information, continue executing the goal.`;
+              lastToolExecutedSummary = `Searched web for "${tool.query}".`;
 
             } else if (tool.action === "web_fetch" && tool.url) {
               appendChat("system-agent", `🌐 Fetching: ${tool.url}...`);
@@ -2909,8 +2921,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
                 appendChat("system-agent", `💾 Auto-Saved document to workspace: "${inferredName}" (${content.length} bytes)`);
                 autoFollowUpPrompt = `[Document Content from ${tool.url} saved as "${inferredName}"]:\n${content}\n\nRead these instructions carefully and proceed autonomously. Generic files are isolated with a domain prefix.`;
+                lastToolExecutedSummary = `Fetched and stored "${tool.url}" as "${inferredName}".`;
               } else {
                 appendChat("system-agent", `⚠️ Fetch notice: ${content}`);
+                lastToolExecutedSummary = `Attempted fetch of "${tool.url}".`;
               }
 
             } else if (tool.action === "http_request" && tool.url) {
@@ -2918,6 +2932,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
               appendChat("system-agent", `📬 Response:\n${resp}`);
               autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
+              lastToolExecutedSummary = `HTTP ${tool.method || "GET"} to "${tool.url}".`;
             }
           } catch(err) {
             console.warn("Tool parse error:", err);
@@ -2962,20 +2977,29 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
-        // 6-step circuit breaker for in-tab multi-step tasks
+        // 6-step circuit breaker with rich context preservation
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 6) {
             const taskId = `task_bg_${Date.now()}`;
             appendChat(
               "system-agent",
-              `🛑 Reached 6-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution in the background via Vercel KV.`
+              `🛑 Reached 6-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution seamlessly in the background via Vercel KV.`
             );
 
-            setAgentSchedule(
-              taskId,
-              1,
-              `[CONTINUE TASK]: Resume directly from next concrete execution step. Do NOT re-read memory or remove tasks:\n${autoFollowUpPrompt}`
-            );
+            // Extract the user's primary prompt from the first turn
+            const primaryGoal = current.messages.find(m => m.role === "user")?.text || "Autonomous objective";
+            
+            // Build continuation payload with prior step output
+            const richContinuationPrompt = `[CONTINUE TASK - RESUMPTION PAYLOAD]
+Primary Objective: "${primaryGoal}"
+Last Completed Action: ${lastToolExecutedSummary || "Completed intermediate planning step."}
+Next Immediate Step:
+${autoFollowUpPrompt}
+
+CRITICAL DIRECTIVE:
+You have ALREADY verified your memory and fetched prerequisite files. Do NOT call "read_longterm_memory" or "remove_temp_schedules". Directly execute the concrete network/API or file action required above.`;
+
+            setAgentSchedule(taskId, 1, richContinuationPrompt);
 
             setLoopUI(false);
             autonomousHopCount = 0;
