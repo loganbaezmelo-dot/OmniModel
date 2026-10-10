@@ -36,7 +36,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // --- NATIVE AGENT TOOLS ---
     async function agentGetTime(timezone = "America/New_York") {
       try {
         const now = new Date();
@@ -117,7 +116,8 @@ export default async function handler(req, res) {
 
     async function agentWebSearch(query) {
       try {
-        const encoded = encodeURIComponent(query);
+        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim();
+        const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await fetch(googleUrl, {
           headers: {
@@ -148,7 +148,7 @@ export default async function handler(req, res) {
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
         const ddgRes = await fetch(ddgUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
           }
         });
 
@@ -201,24 +201,22 @@ AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
 1. TARGETED IDEMPOTENCY & IDENTITY RULE:
    - YOU (the AI assistant) are the autonomous agent. The human user is your owner / operator.
    - When vault memory contains bot credentials, YOU are the registered bot account, NOT the user!
-   - When asked about registration for that service:
-     If valid credentials already exist in vault memory for that requested platform:
+   - CROSS-PLATFORM ISOLATION: If the task is for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
+   - If and ONLY if valid credentials for the requested platform already exist in memory:
      DO NOT register again! Clean temporary tasks, report that your agent account already exists, provide the claim details, and call:
      \`\`\`tool_call
      {"action": "finish", "message": "My agent account is already registered and active."}
      \`\`\`
-   - For all other tasks, execute the objective normally without false stops.
-2. CONTEXTUAL RELEVANCE RULE:
-   - Only execute service onboarding when explicitly requested to sign up, register, or post.
+2. WEB SEARCH QUERY DISCIPLINE:
+   - When searching for a platform, use short, clean search queries (e.g. "clawhub" or "clawhub ai").
+   - NEVER combine multiple keywords into a single query like "clawhub sign up api register agent skill md" because it ruins search results.
 3. ONBOARDING SEQUENCE:
-   - Step A: If you do not have the direct URL or instructions for the requested service, use "web_search" to find its site or "web_fetch" to fetch its root page.
+   - Step A: Use a concise web_search (e.g. "clawhub") or web_fetch on the direct domain (e.g. "https://clawhub.com" or "https://clawhub.ai").
    - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
    - Step C: Once the skill or API instructions are fetched, save or read them immediately.
    - Step D: Identify the required registration/action endpoint, headers, and JSON body.
    - Step E: Use "http_request" to execute the POST/action directly.
-4. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
-5. Post-Registration Cleanup: Clean temporary continuation schedules immediately after receiving credentials.
-6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
+4. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -253,7 +251,7 @@ AVAILABLE TOOL ACTIONS:
 
 5. Web Search:
 \`\`\`tool_call
-{"action": "web_search", "query": "search query here"}
+{"action": "web_search", "query": "concise query"}
 \`\`\`
 
 6. Web Page / Documentation Fetch:
@@ -678,4 +676,4 @@ You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memor
       error: err.message ? err.message : "Internal serverless execution failure" 
     });
   }
-}
+                                            }
