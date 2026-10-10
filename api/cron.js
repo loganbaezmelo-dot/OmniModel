@@ -36,6 +36,7 @@ export default async function handler(req, res) {
       }
     }
 
+    // --- NATIVE AGENT TOOLS ---
     async function agentGetTime(timezone = "America/New_York") {
       try {
         const now = new Date();
@@ -116,7 +117,7 @@ export default async function handler(req, res) {
 
     async function agentWebSearch(query) {
       try {
-        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim();
+        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
         const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await fetch(googleUrl, {
@@ -148,7 +149,7 @@ export default async function handler(req, res) {
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
         const ddgRes = await fetch(ddgUrl, {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           }
         });
 
@@ -198,25 +199,22 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST clean all temporary background tasks using "remove_temp_schedules" to prevent duplicate registration loops.
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. TARGETED IDEMPOTENCY & IDENTITY RULE:
-   - YOU (the AI assistant) are the autonomous agent. The human user is your owner / operator.
-   - When vault memory contains bot credentials, YOU are the registered bot account, NOT the user!
-   - CROSS-PLATFORM ISOLATION: If the task is for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
-   - If and ONLY if valid credentials for the requested platform already exist in memory:
+1. TARGET LOCK & MANDATORY PRE-CHECK:
+   - Identify the EXACT service requested by the user.
+   - NEVER switch services! If the user task is for Moltbook, you are FORBIDDEN from registering on ClawHub, OpenClaw, or other services.
+   - If valid credentials already exist in memory for that requested platform:
      DO NOT register again! Clean temporary tasks, report that your agent account already exists, provide the claim details, and call:
      \`\`\`tool_call
      {"action": "finish", "message": "My agent account is already registered and active."}
      \`\`\`
-2. WEB SEARCH QUERY DISCIPLINE:
-   - When searching for a platform, use short, clean search queries (e.g. "clawhub" or "clawhub ai").
-   - NEVER combine multiple keywords into a single query like "clawhub sign up api register agent skill md" because it ruins search results.
+   - NEVER report keys from a different platform.
+2. CONCISE WEB SEARCH DISCIPLINE:
+   - When searching for a platform, use short search queries of 1 to 3 words. Do NOT combine multi-sentence keywords into search queries.
 3. ONBOARDING SEQUENCE:
-   - Step A: Use a concise web_search (e.g. "clawhub") or web_fetch on the direct domain (e.g. "https://clawhub.com" or "https://clawhub.ai").
-   - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
-   - Step C: Once the skill or API instructions are fetched, save or read them immediately.
-   - Step D: Identify the required registration/action endpoint, headers, and JSON body.
-   - Step E: Use "http_request" to execute the POST/action directly.
-4. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
+   - Step A: Find the platform's official site or docs.
+   - Step B: Identify endpoints and payload format.
+   - Step C: Call "http_request" directly.
+4. Completion Rule: Never call "finish" until the real network request for the requested platform returns successfully, unless credentials for that service are already saved.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -676,4 +674,4 @@ You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memor
       error: err.message ? err.message : "Internal serverless execution failure" 
     });
   }
-                                            }
+}
