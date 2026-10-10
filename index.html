@@ -1142,7 +1142,8 @@
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
 - Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}\% - Wind Speed:${cur.wind_speed_10m} km/h
+- Relative Humidity: ${cur.relative_humidity_2m}${"%"}
+- Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -1260,10 +1261,11 @@
 
             const title = titleEl ? titleEl.textContent.trim() : "";
             const href = linkEl ? linkEl.getAttribute("href") : "";
-            const snippet = snippetEl ? snippetEl.textContent.trim() : "";
+            const rawSnippet = snippetEl ? snippetEl.textContent.trim() : "";
+            const snippet = rawSnippet ? rawSnippet : "No description provided.";
 
             if (title && href && !href.includes("google.com/search")) {
-              results.push(`• **${title}**: ${snippet \vert{}\vert{} "No description provided."} (${href})`);
+              results.push(`• **${title}**: ${snippet} (${href})`);
             }
           });
 
@@ -2986,10 +2988,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               `🛑 Reached 6-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution seamlessly in the background via Vercel KV.`
             );
 
-            // Extract the user's primary prompt from the first turn
             const primaryGoal = current.messages.find(m => m.role === "user")?.text || "Autonomous objective";
             
-            // Build continuation payload with prior step output
             const richContinuationPrompt = `[CONTINUE TASK - RESUMPTION PAYLOAD]
 Primary Objective: "${primaryGoal}"
 Last Completed Action: ${lastToolExecutedSummary || "Completed intermediate planning step."}
