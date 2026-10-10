@@ -2555,20 +2555,28 @@ ${schedulesContext}
 ${commonTools}
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. IDEMPOTENCY / NO-DUPLICATE RULE:
-   - Before registering an account on any platform, check if valid credentials (e.g. an "api_key" or "token") ALREADY exist in [AVAILABLE LONG-TERM MEMORY KEYS] or in workspace files.
-   - If credentials ALREADY exist, DO NOT register again! Use the existing credentials or inform the user that the account is already active.
+1. TARGETED IDEMPOTENCY RULE:
+   - When asked to register, sign up, or create an account for a SPECIFIC service (e.g. Moltbook):
+     Inspect [AVAILABLE LONG-TERM MEMORY KEYS] for that specific service name.
+     If valid credentials (e.g. api_key or token) already exist in vault memory for that requested platform:
+     DO NOT register again! DO NOT inspect notes.txt or browse the web!
+     Immediately inform the user that the account for that service is already registered and present, display the key details, and call:
+     \`\`\`tool_call
+     {"action": "finish", "message": "Account already registered and active."}
+     \`\`\`
+   - For all other requests (asking general questions, greetings, weather, coding, or OTHER platforms):
+     Respond to or execute the user's specific request normally without triggering false finish calls.
 2. CONTEXTUAL RELEVANCE RULE:
    - Only execute service onboarding when explicitly requested to sign up, register, or post. If the user asks general questions or greetings (e.g., "what can you do?"), simply describe your capabilities without calling registration APIs.
 3. ONBOARDING SEQUENCE:
-   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page.
+   - Step A: If you do not have the direct URL or instructions for the requested service, use "web_search" to find its site or "web_fetch" to fetch its root page.
    - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
    - Step C: Once the skill or API instructions are fetched, save or read them immediately.
    - Step D: Identify the required registration/action endpoint, headers, and JSON body.
    - Step E: Use "http_request" to execute the POST/action directly.
 4. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
 5. Post-Registration Cleanup: Immediately call "remove_temp_schedules" upon receiving credentials to eliminate background continuation schedules.
-6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
+6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
@@ -2881,7 +2889,19 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
               const memData = readLongTermMemoryKey(tool.key);
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
-              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nDIRECTIVE: Use this context ONLY if relevant to the user's explicit request. If this answers the user's query or credentials already exist, answer directly and do NOT register new accounts or repeat discovery unnecessarily.`;
+              
+              const userPromptLower = prompt.toLowerCase();
+              const keyMatchesTarget = 
+                (userPromptLower.includes("moltbook") && tool.key.toLowerCase().includes("moltbook")) ||
+                (tool.key.toLowerCase().split("_")[0] && userPromptLower.includes(tool.key.toLowerCase().split("_")[0]));
+
+              const hasTargetCredentials = keyMatchesTarget && typeof memData === "string" && (memData.includes("api_key") || memData.includes("token"));
+
+              if (hasTargetCredentials && (userPromptLower.includes("make") || userPromptLower.includes("create") || userPromptLower.includes("register"))) {
+                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nEXISTING CREDENTIALS VERIFIED: Credentials for this requested platform are already active in vault memory. DO NOT inspect notes.txt or register again. Inform the user that the account already exists and is ready to use, then call {"action": "finish"}.`;
+              } else {
+                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nCONTEXT LOADED: Address the user's specific request using this information. If the user asked a question or conversational prompt, answer directly. DO NOT inspect notes.txt unless asked.`;
+              }
               lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
             } else if (tool.action === "set_schedule" && tool.id) {
