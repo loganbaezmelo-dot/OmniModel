@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const cur = wData.current;
       return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
 - Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
-- Relative Humidity: ${cur.relative_humidity_2m}%
+- Relative Humidity: ${cur.relative_humidity_2m}${"%"}
 - Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
@@ -116,7 +116,8 @@ export default async function handler(req, res) {
         while ((match = blockRegex.exec(html)) !== null && results.length < 5) {
           const title = match[1].replace(/<[^>]+>/g, "").trim();
           const href = match[2];
-          const snippet = match[3] ? match[3].replace(/<[^>]+>/g, "").trim() : "No description.";
+          const rawSnippet = match[3] ? match[3].replace(/<[^>]+>/g, "").trim() : "";
+          const snippet = rawSnippet ? rawSnippet : "No description.";
           if (title && href && !href.includes("google.com/search")) {
             results.push(`• **${title}**: ${snippet} (${href})`);
           }
@@ -161,6 +162,11 @@ ${JSON.stringify(availableMemoryKeys)}
 
 PLATFORM & CREDENTIAL ISOLATION:
 - Match filenames explicitly to prevent cross-service leaks.
+
+ACTION & EXECUTION ENFORCEMENT PROTOCOL:
+- NEVER claim an action is finished simply because you read documentation, summarized a memory key, or outlined steps.
+- When the task requires creating an account, posting data, interacting with a platform, or calling an external service, you MUST inspect instructions (such as skill.md or docs), find the exact endpoint, build the payload, and execute the actual "http_request" or network tool action.
+- You are STRICTLY FORBIDDEN from calling the "finish" tool action until the live execution request has been submitted and returned a real response. Summarizing a service does NOT complete an action on it.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -313,7 +319,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
               "x-api-key": key,
               "anthropic-version": "2023-06-01"
             },
-            method: "POST",
             body: JSON.stringify({
               model,
               system: systemPrompt,
@@ -560,7 +565,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
               }
 
               if (autoFollowUpPrompt && !taskDone) {
-                // Carry rich context payload into next hop
                 currentPrompt = `[CONTINUE TASK - RESUMPTION PAYLOAD]
 Last Completed Action: ${lastToolExecutedSummary || "Completed intermediate step."}
 Next Immediate Step:
