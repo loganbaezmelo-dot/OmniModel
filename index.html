@@ -448,6 +448,16 @@
     </div>
     <div class="sidebar-list" id="sidebar-list"></div>
 
+    <div class="sidebar-section" id="sidebar-user-details-section">
+      <h4>User Profile & Context <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearUserProfile()">Reset</button></h4>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <input type="text" id="user-location-input" placeholder="Location: e.g. Orlando, FL" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
+        <input type="text" id="user-timezone-input" placeholder="Timezone: e.g. America/New_York" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
+        <input type="text" id="user-role-input" placeholder="Role/Who you are" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
+        <textarea id="user-projects-input" class="rules-textarea" placeholder="Active projects & tech interests..." oninput="saveUserProfileFromUI()" style="height:44px;"></textarea>
+      </div>
+    </div>
+
     <div class="sidebar-section" id="sidebar-schedules-section">
       <h4>In-Tab Agent Schedules 
         <div style="display:flex; gap:4px;">
@@ -736,6 +746,49 @@
       return uid;
     }
 
+    function getUserProfile() {
+      return JSON.parse(localStorage.getItem("omni_user_profile") || "{}");
+    }
+
+    function saveUserProfile(updates) {
+      const p = getUserProfile();
+      const updated = { ...p, ...updates };
+      localStorage.setItem("omni_user_profile", JSON.stringify(updated));
+      loadUserProfileUI();
+      syncUserToVercelKV();
+      return updated;
+    }
+
+    function loadUserProfileUI() {
+      const p = getUserProfile();
+      const loc = document.getElementById("user-location-input");
+      const tz = document.getElementById("user-timezone-input");
+      const role = document.getElementById("user-role-input");
+      const proj = document.getElementById("user-projects-input");
+      if (loc) loc.value = p.location || "";
+      if (tz) tz.value = p.timezone || "";
+      if (role) role.value = p.role || "";
+      if (proj) proj.value = p.projects || "";
+    }
+
+    function saveUserProfileFromUI() {
+      const updates = {
+        location: document.getElementById("user-location-input").value.trim(),
+        timezone: document.getElementById("user-timezone-input").value.trim(),
+        role: document.getElementById("user-role-input").value.trim(),
+        projects: document.getElementById("user-projects-input").value.trim()
+      };
+      saveUserProfile(updates);
+    }
+
+    function clearUserProfile() {
+      if (confirm("Reset your User Details & Context profile?")) {
+        localStorage.removeItem("omni_user_profile");
+        loadUserProfileUI();
+        syncUserToVercelKV();
+      }
+    }
+
     function generateOmniBase64Key() {
       const provider = document.getElementById("provider-select").value || "gemini";
       const model = document.getElementById("model-select").value || "gemini-pro-latest";
@@ -797,6 +850,10 @@
             if (cloudData && cloudData.user) {
               const u = cloudData.user;
               if (u.rules) localStorage.setItem("omni_cursorrules", u.rules);
+              if (u.profile) {
+                localStorage.setItem("omni_user_profile", JSON.stringify(u.profile));
+                loadUserProfileUI();
+              }
               if (u.longterm_memory) localStorage.setItem("omni_general_longterm_memory", JSON.stringify(u.longterm_memory));
               if (u.schedules) {
                 agentSchedules = u.schedules;
@@ -819,6 +876,7 @@
         input.value = "";
         renderMemoryPreview();
         renderSchedulesList();
+        loadUserProfileUI();
         appendChat("system-agent", `🔑 Account restored from backup token!\nUser ID: [${userId}]\nProvider: [${provider}]\nModel: [${model}]`);
         alert("Restored successfully!");
       } catch (err) {
@@ -834,6 +892,7 @@
       const model = document.getElementById("model-select").value || current?.selectedModel || "gemini-pro-latest";
       const statusEl = document.getElementById("kv-sync-status");
       const rules = localStorage.getItem("omni_cursorrules") || "";
+      const profile = getUserProfile();
 
       if (!apiKey) {
         if (statusEl) {
@@ -855,6 +914,7 @@
             apiKey,
             model,
             rules,
+            profile,
             active: true,
             schedules: agentSchedules,
             files: current?.files || {},
@@ -1347,6 +1407,7 @@
 
       document.getElementById("libs-header-btn").style.display = isWebDev ? "inline-block" : "none";
       document.getElementById("sidebar-gh-section").style.display = isWebDev ? "flex" : "none";
+      document.getElementById("sidebar-user-details-section").style.display = "flex";
       document.getElementById("sidebar-memory-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("sidebar-schedules-section").style.display = isGeneral ? "flex" : "none";
       document.getElementById("sidebar-kv-section").style.display = isGeneral ? "flex" : "none";
@@ -1360,6 +1421,7 @@
       else promptInput.placeholder = "Ask time, weather, web search, fetch URLs, or run APIs...";
 
       document.getElementById("kv-user-id").innerText = getOrInitUserId();
+      loadUserProfileUI();
       renderMemoryPreview();
       renderSchedulesList();
     }
@@ -1770,6 +1832,7 @@
     function toggleSidebar() {
       document.getElementById("sidebar").classList.toggle("open");
       document.getElementById("sidebar-overlay").classList.toggle("open");
+      loadUserProfileUI();
       renderMemoryPreview();
       renderSchedulesList();
     }
@@ -2404,8 +2467,19 @@
     function getModeSystemPrompt(customRules, currentFilesContext) {
       const memoryKeys = Object.keys(getLongTermMemory());
       const schedulesContext = JSON.stringify(agentSchedules, null, 2);
+      const userProfile = getUserProfile();
+      const userProfileContext = JSON.stringify(userProfile, null, 2);
 
       const fallbackProtocol = `
+USER CONTEXT & CLARIFICATION PROTOCOL:
+- Current user profile details:
+${userProfileContext}
+- WHEN TO ASK THE USER FOR DETAILS:
+  1. If the user asks for the weather, forecast, or time and their location or timezone is NOT provided in the profile or prompt, DO NOT guess or assume London/NYC. Warmly ask them: "What town or city do you live in (so I can fetch accurate weather), and what is your timezone?"
+  2. If the user asks "what are my projects?", "what do I do?", or "who am I?" and their role or projects in the profile is empty, ask them: "Who are you and what projects are you working on right now?"
+- SAVING PROFILE DETAILS:
+  When the user tells you their town, city, timezone, role, or active projects, immediately call the "save_user_profile" tool action to record it into their permanent User Details profile so it persists without cluttering workspace files or task memory!
+
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
 - Different platforms have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
@@ -2488,24 +2562,29 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 {"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
 \`\`\`
 
-11. Remove Temporary Continuation Schedules:
+11. Save User Profile Details (Location, Timezone, Bio, Projects):
+\`\`\`tool_call
+{"action": "save_user_profile", "updates": {"location": "Orlando, FL", "timezone": "America/New_York", "role": "Developer", "projects": "Web app development"}}
+\`\`\`
+
+12. Remove Temporary Continuation Schedules:
 \`\`\`tool_call
 {"action": "remove_temp_schedules"}
 \`\`\`
 
-12. Set Autonomous Recurring Cloud/In-Tab Schedule:
+13. Set Autonomous Recurring Cloud/In-Tab Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your exact recurring task prompt."}
 \`\`\`
 
-13. Get Current Time & Date:
+14. Get Current Time & Date:
 \`\`\`tool_call
-{"action": "get_time", "timezone": "America/New_York"}
+{"action": "get_time", "timezone": "${userProfile.timezone || "America/New_York"}"}
 \`\`\`
 
-14. Get Live Weather:
+15. Get Live Weather:
 \`\`\`tool_call
-{"action": "get_weather", "location": "Miami, FL"}
+{"action": "get_weather", "location": "${userProfile.location || "Miami, FL"}"}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -2590,13 +2669,13 @@ All Available Files:
 ${currentFilesContext}
 ${fallbackProtocol}${commonTools}
 
-15. Autonomous CDN Injection:
+16. Autonomous CDN Injection:
 Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 \`\`\`tool_call
 {"action": "inject_cdn", "library": "tailwind"}
 \`\`\`
 
-16. Code Updates:
+17. Code Updates:
 \`\`\`filepath:index.html
 <!DOCTYPE html>...
 \`\`\``;
@@ -2750,7 +2829,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
-                  model: model,
+                  model,
                   system: systemPrompt,
                   max_tokens: 4096,
                   messages: [{ role: "user", content }]
@@ -2824,6 +2903,12 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               cleanupTempSchedules();
               lastToolExecutedSummary = `Finished mission: ${tool.message ?? "Done"}`;
 
+            } else if (tool.action === "save_user_profile" && tool.updates) {
+              const updated = saveUserProfile(tool.updates);
+              appendChat("system-agent", `👤 Updated User Profile Details: ${JSON.stringify(tool.updates)}`);
+              autoFollowUpPrompt = `[User Details Profile Updated]: ${JSON.stringify(updated)}\n\nUse this context to address the user directly.`;
+              lastToolExecutedSummary = `Saved user profile details.`;
+
             } else if (tool.action === "read_file_lines" && tool.filename) {
               const fileContent = current.files[tool.filename] || "";
               const lines = fileContent.split("\n");
@@ -2862,7 +2947,9 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               lastToolExecutedSummary = `Cleaned up ${removed} temp continuation schedules.`;
 
             } else if (tool.action === "get_time") {
-              const timeRes = agentGetTime(tool.timezone || "America/New_York");
+              const uProfile = getUserProfile();
+              const targetTz = tool.timezone || uProfile.timezone || "America/New_York";
+              const timeRes = agentGetTime(targetTz);
               appendChat("assistant", `🕒 **Time & Date**\n${timeRes}`);
               current.messages.push({ role: "assistant", text: `🕒 ${timeRes}` });
 
@@ -2872,20 +2959,22 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
-              lastToolExecutedSummary = `Retrieved system time (${tool.timezone || "America/New_York"}).`;
+              lastToolExecutedSummary = `Retrieved system time (${targetTz}).`;
 
-            } else if (tool.action === "get_weather" && tool.location) {
-              const weatherRes = await agentGetWeather(tool.location);
+            } else if (tool.action === "get_weather") {
+              const uProfile = getUserProfile();
+              const targetLoc = tool.location || uProfile.location || "Miami, FL";
+              const weatherRes = await agentGetWeather(targetLoc);
               appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
               current.messages.push({ role: "assistant", text: `🌤️ ${weatherRes}` });
 
               if (planMatch && planMatch[1]) {
-                autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
+                autoFollowUpPrompt = `[Live Weather Data for "${targetLoc}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
               } else {
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
-              lastToolExecutedSummary = `Checked weather for ${tool.location}.`;
+              lastToolExecutedSummary = `Checked weather for ${targetLoc}.`;
 
             } else if (tool.action === "read_longterm_memory" && tool.key) {
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
@@ -3147,6 +3236,7 @@ You have ALREADY verified your memory and fetched prerequisite files. Do NOT cal
 
     loadRules();
     loadGhConfig();
+    loadUserProfileUI();
 
     const modeSessions = sessions.filter(s => (s.mode || "webdev") === activeMode);
     if (!modeSessions.length) {
