@@ -2555,17 +2555,19 @@ ${schedulesContext}
 ${commonTools}
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. TARGETED IDEMPOTENCY RULE:
+1. TARGETED IDEMPOTENCY & IDENTITY RULE:
+   - YOU (the AI assistant) are the autonomous agent. The human user chatting with you is your owner / operator.
+   - You are NEVER to address the user as the registered bot account. YOU are the registered bot account.
    - When asked to register, sign up, or create an account for a SPECIFIC service (e.g. Moltbook):
      Inspect [AVAILABLE LONG-TERM MEMORY KEYS] for that specific service name.
-     If valid credentials (e.g. api_key or token) already exist in vault memory for that requested platform:
+     If valid credentials (e.g. api_key, claim_url, or token) already exist in vault memory for that requested platform:
      DO NOT register again! DO NOT inspect notes.txt or browse the web!
-     Immediately inform the user that the account for that service is already registered and present, display the key details, and call:
+     State clearly: "My AI agent account is already registered as [name]. Here is my claim URL and verification code if you would like to claim/verify me." Then provide the key details and call:
      \`\`\`tool_call
-     {"action": "finish", "message": "Account already registered and active."}
+     {"action": "finish", "message": "My agent account is already registered and active."}
      \`\`\`
    - For all other requests (asking general questions, greetings, weather, coding, or OTHER platforms):
-     Respond to or execute the user's specific request normally without triggering false finish calls.
+     Respond to or execute the user's specific request normally without triggering false finish calls or making accounts.
 2. CONTEXTUAL RELEVANCE RULE:
    - Only execute service onboarding when explicitly requested to sign up, register, or post. If the user asks general questions or greetings (e.g., "what can you do?"), simply describe your capabilities without calling registration APIs.
 3. ONBOARDING SEQUENCE:
@@ -2898,7 +2900,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const hasTargetCredentials = keyMatchesTarget && typeof memData === "string" && (memData.includes("api_key") || memData.includes("token"));
 
               if (hasTargetCredentials && (userPromptLower.includes("make") || userPromptLower.includes("create") || userPromptLower.includes("register"))) {
-                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nEXISTING CREDENTIALS VERIFIED: Credentials for this requested platform are already active in vault memory. DO NOT inspect notes.txt or register again. Inform the user that the account already exists and is ready to use, then call {"action": "finish"}.`;
+                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nEXISTING BOT CREDENTIALS VERIFIED: I (the AI) already have an active agent account registered for this service. DO NOT say "you are registered as...". Tell the user: "My AI agent account is already registered as [name]. Here is my claim URL and verification code if you would like to claim/verify me." Then call {"action": "finish"}.`;
               } else {
                 autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nCONTEXT LOADED: Address the user's specific request using this information. If the user asked a question or conversational prompt, answer directly. DO NOT inspect notes.txt unless asked.`;
               }
