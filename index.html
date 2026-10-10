@@ -470,7 +470,13 @@
       <h4>User Profile & Context <button class="icon-btn" style="padding:2px 6px; font-size:10px;" onclick="clearUserProfile()">Reset</button></h4>
       <div style="display:flex; flex-direction:column; gap:6px;">
         <input type="text" id="user-location-input" placeholder="Location: e.g. Orlando, FL" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
-        <input type="text" id="user-timezone-input" placeholder="Timezone: e.g. America/New_York" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="user-timezone-input" placeholder="Timezone: America/New_York" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px; flex:1;">
+          <select id="user-temp-unit-select" onchange="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
+            <option value="F">°F (Fahrenheit)</option>
+            <option value="C">°C (Celsius)</option>
+          </select>
+        </div>
         <input type="text" id="user-role-input" placeholder="Role/Who you are" oninput="saveUserProfileFromUI()" style="font-size:11px; padding:4px 8px;">
         <textarea id="user-projects-input" class="rules-textarea" placeholder="Active projects & tech interests..." oninput="saveUserProfileFromUI()" style="height:44px;"></textarea>
       </div>
@@ -545,7 +551,7 @@
             <span class="lib-name">Lucide Icons</span>
             <span class="lib-desc">Modern icon set</span>
           </div>
-          <button class="icon-btn" style="padding:4px 10px; font-size:12px;" onclick="injectCdn('lucide')">+ Add</button>
+          <button class="icon-btn" style="padding:4px 10px; font-size:12px;" onclick="injectCdn('chartjs')">+ Add</button>
         </div>
         <div class="lib-row">
           <div class="lib-info">
@@ -781,10 +787,12 @@
       const p = getUserProfile();
       const loc = document.getElementById("user-location-input");
       const tz = document.getElementById("user-timezone-input");
+      const unit = document.getElementById("user-temp-unit-select");
       const role = document.getElementById("user-role-input");
       const proj = document.getElementById("user-projects-input");
       if (loc) loc.value = p.location || "";
       if (tz) tz.value = p.timezone || "";
+      if (unit) unit.value = p.tempUnit || "F";
       if (role) role.value = p.role || "";
       if (proj) proj.value = p.projects || "";
     }
@@ -793,6 +801,7 @@
       const updates = {
         location: document.getElementById("user-location-input").value.trim(),
         timezone: document.getElementById("user-timezone-input").value.trim(),
+        tempUnit: document.getElementById("user-temp-unit-select").value || "F",
         role: document.getElementById("user-role-input").value.trim(),
         projects: document.getElementById("user-projects-input").value.trim()
       };
@@ -1206,7 +1215,7 @@
       }
     }
 
-    async function agentGetWeather(location = "London") {
+    async function agentGetWeather(location = "London", unit = "F") {
       try {
         const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
         if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
@@ -1215,14 +1224,20 @@
           return `Location "${location}" not found.`;
         }
         const { latitude, longitude, name, admin1, country } = geoData.results[0];
-        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+        
+        const isFahrenheit = String(unit).toUpperCase().includes("F");
+        const tempQuery = isFahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
+        const tempSymbol = isFahrenheit ? "°F" : "°C";
+        const windSymbol = isFahrenheit ? "mph" : "km/h";
+
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m${tempQuery}&timezone=auto`);
         if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
+- Temperature: ${cur.temperature_2m}${tempSymbol} (Feels like: ${cur.apparent_temperature}${tempSymbol})
 - Relative Humidity: ${cur.relative_humidity_2m}${"%"}
-- Wind Speed: ${cur.wind_speed_10m} km/h
+- Wind Speed: ${cur.wind_speed_10m} ${windSymbol}
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
       } catch (err) {
@@ -2191,7 +2206,7 @@
         const logsContainer = document.getElementById("console-logs");
         const row = document.createElement("div");
         row.className = `log-item ${e.data.level}`;
-        row.innerText = `[${e.data.level.toUpperCase()}]${e.data.text}`;
+        row.innerText = `[${e.data.level.toUpperCase()}] ${e.data.text}`;
         logsContainer.appendChild(row);
         logsContainer.scrollTop = logsContainer.scrollHeight;
       }
@@ -2493,10 +2508,11 @@ USER CONTEXT & CLARIFICATION PROTOCOL:
 - Current user profile details:
 ${userProfileContext}
 - WHEN TO ASK THE USER FOR DETAILS:
-  1. If the user asks for the weather, forecast, or time and their location or timezone is NOT provided in the profile or prompt, DO NOT guess or assume London/NYC. Warmly ask them: "What town or city do you live in (so I can fetch accurate weather), and what is your timezone?"
+  1. If the user asks for the weather, forecast, or time and their location or temperature unit preference (Fahrenheit vs Celsius) is NOT known:
+     Ask: "What town/city do you live in, what is your timezone, and do you prefer Fahrenheit (°F) or Celsius (°C)?"
   2. If the user asks "what are my projects?", "what do I do?", or "who am I?" and their role or projects in the profile is empty, ask them: "Who are you and what projects are you working on right now?"
 - SAVING PROFILE DETAILS:
-  When the user tells you their town, city, timezone, role, or active projects, immediately call the "save_user_profile" tool action to record it into their permanent User Details profile so it persists without cluttering workspace files or task memory!
+  When the user tells you their town, city, timezone, temp unit (F/C), role, or active projects, immediately call the "save_user_profile" tool action to record it into their permanent User Details profile so it persists without cluttering workspace files or task memory!
 
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
 - Different platforms have distinct endpoints, API schemas, and credentials.
@@ -2580,9 +2596,9 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 {"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
 \`\`\`
 
-11. Save User Profile Details (Location, Timezone, Bio, Projects):
+11. Save User Profile Details (Location, Timezone, Temp Unit, Bio, Projects):
 \`\`\`tool_call
-{"action": "save_user_profile", "updates": {"location": "Orlando, FL", "timezone": "America/New_York", "role": "Developer", "projects": "Web app development"}}
+{"action": "save_user_profile", "updates": {"location": "Orlando, FL", "timezone": "America/New_York", "tempUnit": "F", "role": "Developer", "projects": "Web apps"}}
 \`\`\`
 
 12. Remove Temporary Continuation Schedules:
@@ -2602,7 +2618,7 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 
 15. Get Live Weather:
 \`\`\`tool_call
-{"action": "get_weather", "location": "${userProfile.location || "Miami, FL"}"}
+{"action": "get_weather", "location": "${userProfile.location || "Miami, FL"}", "unit": "${userProfile.tempUnit || "F"}"}
 \`\`\``;
 
       if (activeMode === "writing") {
@@ -2847,7 +2863,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                   "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
-                  model,
+                  model: model,
                   system: systemPrompt,
                   max_tokens: 4096,
                   messages: [{ role: "user", content }]
@@ -2982,7 +2998,8 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
             } else if (tool.action === "get_weather") {
               const uProfile = getUserProfile();
               const targetLoc = tool.location || uProfile.location || "Miami, FL";
-              const weatherRes = await agentGetWeather(targetLoc);
+              const targetUnit = tool.unit || uProfile.tempUnit || "F";
+              const weatherRes = await agentGetWeather(targetLoc, targetUnit);
               appendChat("assistant", `🌤️ **Live Weather**\n${weatherRes}`);
               current.messages.push({ role: "assistant", text: `🌤️ ${weatherRes}` });
 
@@ -2992,7 +3009,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 agentExplicitFinished = true;
                 autoFollowUpPrompt = "";
               }
-              lastToolExecutedSummary = `Checked weather for ${targetLoc}.`;
+              lastToolExecutedSummary = `Checked weather for ${targetLoc} (${targetUnit}).`;
 
             } else if (tool.action === "read_longterm_memory" && tool.key) {
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
