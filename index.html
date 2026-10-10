@@ -1241,26 +1241,29 @@
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
-        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
-        const res = await callBackendProxy(ddgUrl, "GET");
+        const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
+        const res = await callBackendProxy(googleUrl, "GET");
 
-        if (res.ok && typeof res.data === "string" && res.data.includes("result__snippet")) {
+        if (res.ok && typeof res.data === "string" && res.data.length > 500) {
           const doc = new DOMParser().parseFromString(res.data, "text/html");
-          const links = doc.querySelectorAll(".result__body");
           const results = [];
 
-          links.forEach((el, i) => {
-            if (i >= 5) return;
-            const titleEl = el.querySelector(".result__title .result__snippet") || el.querySelector(".result__title");
-            const snippetEl = el.querySelector(".result__snippet");
-            const urlEl = el.querySelector(".result__url");
+          const resultBlocks = doc.querySelectorAll("div.MjjYud, div.g, div.tF2C2");
+
+          resultBlocks.forEach(block => {
+            if (results.length >= 5) return;
+
+            const titleEl = block.querySelector("h3");
+            const linkEl = block.querySelector("a[href^='http']");
+            const snippetEl = block.querySelector("div.VwiC3b, div[style*='-webkit-line-clamp'], span.aCOpRe") || 
+                              block.querySelector("div[data-snf], div[data-sncf]");
 
             const title = titleEl ? titleEl.textContent.trim() : "";
+            const href = linkEl ? linkEl.getAttribute("href") : "";
             const snippet = snippetEl ? snippetEl.textContent.trim() : "";
-            const rawUrl = urlEl ? urlEl.getAttribute("href") || urlEl.textContent.trim() : "";
 
-            if (title && snippet) {
-              results.push(`• **${title}**: ${snippet} (${rawUrl})`);
+            if (title && href && !href.includes("google.com/search")) {
+              results.push(`• **${title}**: ${snippet \vert{}\vert{} "No description provided."} (${href})`);
             }
           });
 
@@ -1269,39 +1272,34 @@
           }
         }
 
-        const ddgJsonUrl = `https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`;
-        const jsonRes = await callBackendProxy(ddgJsonUrl, "GET");
-        if (jsonRes.ok) {
-          try {
-            const parsed = typeof jsonRes.data === "string" ? JSON.parse(jsonRes.data) : jsonRes.data;
-            let results = [];
-            if (parsed.AbstractText) {
-              results.push(`• **${parsed.Heading || query}**: ${parsed.AbstractText} (${parsed.AbstractURL})`);
-            }
-            if (parsed.RelatedTopics && parsed.RelatedTopics.length) {
-              parsed.RelatedTopics.slice(0, 4).forEach(t => {
-                if (t.Text && t.FirstURL) results.push(`• ${t.Text} (${t.FirstURL})`);
-              });
-            }
-            if (results.length) return results.join("\n\n");
-          } catch(e) {}
-        }
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
+        const ddgRes = await callBackendProxy(ddgUrl, "GET");
+        if (ddgRes.ok && typeof ddgRes.data === "string") {
+          const doc = new DOMParser().parseFromString(ddgRes.data, "text/html");
+          const links = doc.querySelectorAll(".result__body");
+          const ddgResults = [];
 
-        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=4&namespace=0&format=json&origin=*`);
-        if (wikiRes.ok) {
-          const wikiData = await wikiRes.json();
-          if (wikiData && wikiData[1] && wikiData[1].length) {
-            let results = [];
-            for (let i = 0; i < wikiData[1].length; i++) {
-              if (wikiData[2][i]) {
-                results.push(`• **${wikiData[1][i]}**: ${wikiData[2][i]} (${wikiData[3][i]})`);
-              }
+          links.forEach((el, i) => {
+            if (i >= 5) return;
+            const titleEl = el.querySelector(".result__title");
+            const snippetEl = el.querySelector(".result__snippet");
+            const urlEl = el.querySelector(".result__url");
+
+            const title = titleEl ? titleEl.textContent.trim() : "";
+            const snippet = snippetEl ? snippetEl.textContent.trim() : "";
+            const rawUrl = urlEl ? urlEl.getAttribute("href") || urlEl.textContent.trim() : "";
+
+            if (title && snippet) {
+              ddgResults.push(`• **${title}**: ${snippet} (${rawUrl})`);
             }
-            if (results.length) return results.join("\n\n");
+          });
+
+          if (ddgResults.length > 0) {
+            return ddgResults.join("\n\n");
           }
         }
 
-        return `No web results found for "${query}".`;
+        return `No direct search matches found for "${query}".`;
       } catch (err) {
         return `Search error: ${err.message}`;
       }
@@ -1557,8 +1555,8 @@
       speechRecognizer.start();
     }
 
-    function handleImageUpload(e) {
-      const file = e.target.files[0];
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (evt) => {
@@ -1881,7 +1879,6 @@
       const historyDiv = document.getElementById("chat-history");
       historyDiv.innerHTML = "";
       
-      // Filter out ghost empty messages
       current.messages = (current.messages || []).filter(m => (m.text && m.text.trim()) || m.img);
       current.messages.forEach(m => {
         appendChat(m.role, m.text, m.img || null, false);
@@ -2764,15 +2761,27 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
         let autoFollowUpPrompt = "";
         let agentExplicitFinished = false;
+        let burnedRealHop = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
         if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
           autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
+          burnedRealHop = true;
         }
 
         for (const tc of toolCalls) {
           try {
             const tool = JSON.parse(tc[1]);
+
+            // Administrative and inspection tools DO NOT burn an execution hop
+            if (
+              tool.action !== "remove_temp_schedules" && 
+              tool.action !== "read_longterm_memory" && 
+              tool.action !== "get_time"
+            ) {
+              burnedRealHop = true;
+            }
+
             if (tool.action === "finish") {
               agentExplicitFinished = true;
               appendChat("system-agent", `🏁 AI Mission Complete: ${tool.message || "Done!"}`);
@@ -2840,7 +2849,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
               const memData = readLongTermMemoryKey(tool.key);
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
-              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed with your objective.`;
+              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed directly with your objective using this information. Do not re-fetch it.`;
 
             } else if (tool.action === "set_schedule" && tool.id) {
               setAgentSchedule(tool.id, tool.intervalMinutes || 30, tool.prompt || "Run scheduled routine.");
@@ -2949,22 +2958,23 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
         if (!autoFollowUpPrompt) {
           autonomousHopCount = 0;
-        } else {
+        } else if (burnedRealHop) {
           autonomousHopCount++;
         }
 
+        // 6-step circuit breaker for in-tab multi-step tasks
         if (autoFollowUpPrompt && !agentExplicitFinished) {
-          if (autonomousHopCount >= 3) {
+          if (autonomousHopCount >= 6) {
             const taskId = `task_bg_${Date.now()}`;
             appendChat(
               "system-agent",
-              `🛑 Reached 3-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution in the background via Vercel KV.`
+              `🛑 Reached 6-step in-tab limit! Scheduled cloud cron task [${taskId}] to continue execution in the background via Vercel KV.`
             );
 
             setAgentSchedule(
               taskId,
               1,
-              `[CONTINUE TASK]: Resume execution from step 3:\n${autoFollowUpPrompt}`
+              `[CONTINUE TASK]: Resume directly from next concrete execution step. Do NOT re-read memory or remove tasks:\n${autoFollowUpPrompt}`
             );
 
             setLoopUI(false);
