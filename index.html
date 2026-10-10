@@ -551,7 +551,7 @@
             <span class="lib-name">Lucide Icons</span>
             <span class="lib-desc">Modern icon set</span>
           </div>
-          <button class="icon-btn" style="padding:4px 10px; font-size:12px;" onclick="injectCdn('chartjs')">+ Add</button>
+          <button class="icon-btn" style="padding:4px 10px; font-size:12px;" onclick="injectCdn('lucide')">+ Add</button>
         </div>
         <div class="lib-row">
           <div class="lib-info">
@@ -1236,7 +1236,7 @@
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
 - Temperature: ${cur.temperature_2m}${tempSymbol} (Feels like: ${cur.apparent_temperature}${tempSymbol})
-- Relative Humidity: ${cur.relative_humidity_2m}${"%"}
+- Relative Humidity: ${cur.relative_humidity_2m}%
 - Wind Speed: ${cur.wind_speed_10m} ${windSymbol}
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
@@ -1335,19 +1335,18 @@
 
     async function agentWebSearch(query) {
       try {
-        const encoded = encodeURIComponent(query);
+        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim();
+        const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await callBackendProxy(googleUrl, "GET");
 
         if (res.ok && typeof res.data === "string" && res.data.length > 500) {
           const doc = new DOMParser().parseFromString(res.data, "text/html");
           const results = [];
-
           const resultBlocks = doc.querySelectorAll("div.MjjYud, div.g, div.tF2C2");
 
           resultBlocks.forEach(block => {
             if (results.length >= 5) return;
-
             const titleEl = block.querySelector("h3");
             const linkEl = block.querySelector("a[href^='http']");
             const snippetEl = block.querySelector("div.VwiC3b, div[style*='-webkit-line-clamp'], span.aCOpRe") || 
@@ -1363,9 +1362,7 @@
             }
           });
 
-          if (results.length > 0) {
-            return results.join("\n\n");
-          }
+          if (results.length > 0) return results.join("\n\n");
         }
 
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
@@ -1390,9 +1387,7 @@
             }
           });
 
-          if (ddgResults.length > 0) {
-            return ddgResults.join("\n\n");
-          }
+          if (ddgResults.length > 0) return ddgResults.join("\n\n");
         }
 
         return `No direct search matches found for "${query}".`;
@@ -2517,7 +2512,8 @@ ${userProfileContext}
 PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
 - Different platforms have distinct endpoints, API schemas, and credentials.
 - NEVER mix credentials or endpoints between platforms.
-- Match filenames explicitly to prevent cross-service leaks.
+- Match filenames and service names explicitly to prevent cross-service leaks.
+- CROSS-PLATFORM ISOLATION: When the user asks for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
 
 ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - NEVER claim an action is finished simply because you read documentation, summarized a memory key, or outlined steps.
@@ -2568,7 +2564,7 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 
 5. Web Search:
 \`\`\`tool_call
-{"action": "web_search", "query": "search query here"}
+{"action": "web_search", "query": "concise query"}
 \`\`\`
 
 6. Web Page / Documentation Fetch:
@@ -2670,28 +2666,25 @@ ${commonTools}
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
 1. TARGETED IDEMPOTENCY & IDENTITY RULE:
    - YOU (the AI assistant) are the autonomous agent. The human user chatting with you is your owner / operator.
-   - You are NEVER to address the user as the registered bot account. YOU are the registered bot account.
-   - When asked to register, sign up, or create an account for a SPECIFIC service (e.g. Moltbook):
-     Inspect [AVAILABLE LONG-TERM MEMORY KEYS] for that specific service name.
-     If valid credentials (e.g. api_key, claim_url, or token) already exist in vault memory for that requested platform:
-     DO NOT register again! DO NOT inspect notes.txt or browse the web!
-     State clearly: "My AI agent account is already registered as [name]. Here is my claim URL and verification code if you would like to claim/verify me." Then provide the key details and call:
+   - You are NEVER to address the user as the registered bot account.
+   - CROSS-PLATFORM ISOLATION: When the user asks for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
+   - If and ONLY if valid credentials for the EXACT requested platform already exist in memory:
+     State clearly: "My AI agent account is already registered as [name] on [platform]. Here is my claim URL and verification code if you would like to claim/verify me." Then provide the key details and call:
      \`\`\`tool_call
-     {"action": "finish", "message": "My agent account is already registered and active."}
+     {"action": "finish", "message": "Account already registered and active."}
      \`\`\`
    - For all other requests (asking general questions, greetings, weather, coding, or OTHER platforms):
      Respond to or execute the user's specific request normally without triggering false finish calls or making accounts.
-2. CONTEXTUAL RELEVANCE RULE:
-   - Only execute service onboarding when explicitly requested to sign up, register, or post. If the user asks general questions or greetings (e.g., "what can you do?"), simply describe your capabilities without calling registration APIs.
+2. WEB SEARCH QUERY DISCIPLINE:
+   - When searching for a platform, use short, clean search queries (e.g. "clawhub", "clawhub platform", or "clawhub ai").
+   - NEVER combine multiple keywords into a single query like "clawhub sign up api register agent skill md" because it ruins search results.
 3. ONBOARDING SEQUENCE:
-   - Step A: If you do not have the direct URL or instructions for the requested service, use "web_search" to find its site or "web_fetch" to fetch its root page.
-   - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
+   - Step A: Use a concise web_search (e.g. "clawhub") or web_fetch on the direct domain (e.g. "https://clawhub.com" or "https://clawhub.ai").
+   - Step B: Inspect the fetched content or check endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
    - Step C: Once the skill or API instructions are fetched, save or read them immediately.
    - Step D: Identify the required registration/action endpoint, headers, and JSON body.
    - Step E: Use "http_request" to execute the POST/action directly.
-4. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
-5. Post-Registration Cleanup: Immediately call "remove_temp_schedules" upon receiving credentials to eliminate background continuation schedules.
-6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
+4. Completion Rule: Never call "finish" until the real registration or target API request for the requested platform has returned its response payload, UNLESS targeted credentials for that exact service already exist.
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
@@ -3017,16 +3010,17 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
               
               const userPromptLower = prompt.toLowerCase();
-              const keyMatchesTarget = 
-                (userPromptLower.includes("moltbook") && tool.key.toLowerCase().includes("moltbook")) ||
-                (tool.key.toLowerCase().split("_")[0] && userPromptLower.includes(tool.key.toLowerCase().split("_")[0]));
+              const keyPrefix = tool.key.toLowerCase().split("_")[0];
+              const keyMatchesTarget = userPromptLower.includes(keyPrefix);
 
               const hasTargetCredentials = keyMatchesTarget && typeof memData === "string" && (memData.includes("api_key") || memData.includes("token"));
 
               if (hasTargetCredentials && (userPromptLower.includes("make") || userPromptLower.includes("create") || userPromptLower.includes("register"))) {
-                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nEXISTING BOT CREDENTIALS VERIFIED: I (the AI) already have an active agent account registered for this service. DO NOT say "you are registered as...". Tell the user: "My AI agent account is already registered as [name]. Here is my claim URL and verification code if you would like to claim/verify me." Then call {"action": "finish"}.`;
+                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nEXISTING BOT CREDENTIALS VERIFIED: I (the AI) already have an active agent account registered for this exact service. Tell the user: "My AI agent account is already registered as [name] on this platform. Here is my claim URL and verification code if you would like to claim/verify me." Then call {"action": "finish"}.`;
+              } else if (!keyMatchesTarget) {
+                autoFollowUpPrompt = `[Memory Notice]: The retrieved key "${tool.key}" does NOT match the requested service in the user's prompt ("${prompt}"). DO NOT report these credentials to the user. Proceed with finding the actual requested service via a clean web_search or web_fetch.`;
               } else {
-                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nCONTEXT LOADED: Address the user's specific request using this information. If the user asked a question or conversational prompt, answer directly. DO NOT inspect notes.txt unless asked.`;
+                autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nCONTEXT LOADED: Address the user's specific request using this information. DO NOT inspect notes.txt unless asked.`;
               }
               lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
@@ -3283,4 +3277,4 @@ You have ALREADY verified your memory and fetched prerequisite files. Do NOT cal
     }
   </script>
 </body>
-</html>
+  </html>
