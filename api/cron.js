@@ -149,9 +149,12 @@ export default async function handler(req, res) {
     }
   }
 
-  function getCronSystemPrompt(customRules, currentFilesContext, availableMemoryKeys) {
+  function getCronSystemPrompt(customRules, currentFilesContext, availableMemoryKeys, userProfileContext) {
     return `You are an Unconstrained Autonomous Problem Solver executing on the background serverless cron worker.
 User custom instructions: ${customRules || ""}
+
+USER CONTEXT:
+${JSON.stringify(userProfileContext || {}, null, 2)}
 
 PRIMARY WORKSPACE FILES:
 ${currentFilesContext}
@@ -252,24 +255,29 @@ AVAILABLE TOOL ACTIONS:
 {"action": "save_to_longterm_memory", "key": "memory_key", "content": "Data to store..."}
 \`\`\`
 
-11. Remove Temporary Continuation Schedules:
+11. Save User Profile Details:
+\`\`\`tool_call
+{"action": "save_user_profile", "updates": {"location": "...", "timezone": "...", "role": "...", "projects": "..."}}
+\`\`\`
+
+12. Remove Temporary Continuation Schedules:
 \`\`\`tool_call
 {"action": "remove_temp_schedules"}
 \`\`\`
 
-12. Set Autonomous Recurring Schedule:
+13. Set Autonomous Recurring Schedule:
 \`\`\`tool_call
 {"action": "set_schedule", "id": "task_id", "intervalMinutes": 30, "prompt": "Your recurring task prompt."}
 \`\`\`
 
-13. Get Current Time & Date:
+14. Get Current Time & Date:
 \`\`\`tool_call
-{"action": "get_time", "timezone": "America/New_York"}
+{"action": "get_time", "timezone": "${userProfileContext?.timezone || "America/New_York"}"}
 \`\`\`
 
-14. Get Live Weather:
+15. Get Live Weather:
 \`\`\`tool_call
-{"action": "get_weather", "location": "Miami, FL"}
+{"action": "get_weather", "location": "${userProfileContext?.location || "Miami, FL"}"}
 \`\`\`
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
@@ -388,6 +396,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
       let userFiles = userConfig.files || {};
       let userMemory = userConfig.longterm_memory || {};
+      let userProfile = userConfig.profile || {};
 
       for (let i = 0; i < schedules.length; i++) {
         const sc = schedules[i];
@@ -405,7 +414,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
           while (hops < 6 && !taskDone) {
             const currentFilesContext = JSON.stringify(userFiles, null, 2);
             const availableMemoryKeys = Object.keys(userMemory);
-            const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, availableMemoryKeys);
+            const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, availableMemoryKeys, userProfile);
 
             try {
               lastReply = await callProviderModel(provider, model, apiKey, systemPrompt, currentPrompt);
@@ -441,6 +450,10 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     taskDone = true;
                     lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
                     schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                  } else if (tool.action === "save_user_profile" && tool.updates) {
+                    userProfile = { ...userProfile, ...tool.updates };
+                    autoFollowUpPrompt = `[User Details Profile Updated]: ${JSON.stringify(userProfile)}\n\nUse this context to proceed.`;
+                    lastToolExecutedSummary = `Saved user profile details.`;
                   } else if (tool.action === "read_file_lines" && tool.filename) {
                     const content = userFiles[tool.filename] || "";
                     const lines = content.split("\n");
@@ -474,7 +487,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     lastToolExecutedSummary = `Cleaned up ${removed} temp continuation schedules.`;
 
                   } else if (tool.action === "get_time") {
-                    const timeRes = await agentGetTime(tool.timezone || "America/New_York");
+                    const targetTz = tool.timezone || userProfile.timezone || "America/New_York";
+                    const timeRes = await agentGetTime(targetTz);
                     if (planMatch && planMatch[1]) {
                       autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action in your plan.`;
                     } else {
@@ -482,18 +496,19 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
-                    lastToolExecutedSummary = `Retrieved system time (${tool.timezone || "America/New_York"}).`;
+                    lastToolExecutedSummary = `Retrieved system time (${targetTz}).`;
 
-                  } else if (tool.action === "get_weather" && tool.location) {
-                    const weatherRes = await agentGetWeather(tool.location);
+                  } else if (tool.action === "get_weather") {
+                    const targetLoc = tool.location || userProfile.location || "Miami, FL";
+                    const weatherRes = await agentGetWeather(targetLoc);
                     if (planMatch && planMatch[1]) {
-                      autoFollowUpPrompt = `[Live Weather Data for "${tool.location}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
+                      autoFollowUpPrompt = `[Live Weather Data for "${targetLoc}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
                     } else {
                       lastReply = `🌤️ ${weatherRes}`;
                       taskDone = true;
                       autoFollowUpPrompt = "";
                     }
-                    lastToolExecutedSummary = `Checked weather for ${tool.location}.`;
+                    lastToolExecutedSummary = `Checked weather for ${targetLoc}.`;
 
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
@@ -618,6 +633,7 @@ You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memor
 
       userConfig.files = userFiles;
       userConfig.longterm_memory = userMemory;
+      userConfig.profile = userProfile;
       userConfig.schedules = schedules;
       userConfig.updatedAt = new Date().toISOString();
       await kvCmd("set", `agent:user:${userId}`, JSON.stringify(userConfig));
