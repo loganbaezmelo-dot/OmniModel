@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -1241,12 +1241,39 @@
     async function agentWebSearch(query) {
       try {
         const encoded = encodeURIComponent(query);
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
+        const res = await callBackendProxy(ddgUrl, "GET");
+
+        if (res.ok && typeof res.data === "string" && res.data.includes("result__snippet")) {
+          const doc = new DOMParser().parseFromString(res.data, "text/html");
+          const links = doc.querySelectorAll(".result__body");
+          const results = [];
+
+          links.forEach((el, i) => {
+            if (i >= 5) return;
+            const titleEl = el.querySelector(".result__title .result__snippet") || el.querySelector(".result__title");
+            const snippetEl = el.querySelector(".result__snippet");
+            const urlEl = el.querySelector(".result__url");
+
+            const title = titleEl ? titleEl.textContent.trim() : "";
+            const snippet = snippetEl ? snippetEl.textContent.trim() : "";
+            const rawUrl = urlEl ? urlEl.getAttribute("href") || urlEl.textContent.trim() : "";
+
+            if (title && snippet) {
+              results.push(`• **${title}**: ${snippet} (${rawUrl})`);
+            }
+          });
+
+          if (results.length > 0) {
+            return results.join("\n\n");
+          }
+        }
+
         const ddgJsonUrl = `https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`;
-        
-        const res = await callBackendProxy(ddgJsonUrl, "GET");
-        if (res.ok) {
+        const jsonRes = await callBackendProxy(ddgJsonUrl, "GET");
+        if (jsonRes.ok) {
           try {
-            const parsed = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+            const parsed = typeof jsonRes.data === "string" ? JSON.parse(jsonRes.data) : jsonRes.data;
             let results = [];
             if (parsed.AbstractText) {
               results.push(`• ${parsed.Heading || query}: ${parsed.AbstractText} (${parsed.AbstractURL})`);
@@ -1260,17 +1287,21 @@
           } catch(e) {}
         }
 
-        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=3&namespace=0&format=json&origin=*`);
-        const wikiData = await wikiRes.json();
-        if (wikiData && wikiData[1] && wikiData[1].length) {
-          let results = [];
-          for (let i = 0; i < wikiData[1].length; i++) {
-            results.push(`• ${wikiData[1][i]}: ${wikiData[2][i]} (${wikiData[3][i]})`);
+        const wikiRes = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&search=${encoded}&limit=4&namespace=0&format=json&origin=*`);
+        if (wikiRes.ok) {
+          const wikiData = await wikiRes.json();
+          if (wikiData && wikiData[1] && wikiData[1].length) {
+            let results = [];
+            for (let i = 0; i < wikiData[1].length; i++) {
+              if (wikiData[2][i]) {
+                results.push(`• **${wikiData[1][i]}**: ${wikiData[2][i]} (${wikiData[3][i]})`);
+              }
+            }
+            if (results.length) return results.join("\n\n");
           }
-          return results.join("\n");
         }
 
-        return `No direct search matches found for "${query}".`;
+        return `No web results found for "${query}".`;
       } catch (err) {
         return `Search error: ${err.message}`;
       }
@@ -1336,6 +1367,11 @@
       document.getElementById("libs-modal-overlay").classList.toggle("open", open);
     }
 
+    function sanitizeHtmlSourceUrls(code) {
+      if (!code) return "";
+      return code.replace(/(src|href)=["']\s*\[\s*(https?:\/\/[^\]\s"'>]+)\s*\]\s*["']/gi, '$1="$2"');
+    }
+
     function injectCdn(key, silent = false) {
       const tag = CDN_TAGS[key.toLowerCase()];
       const current = getActiveSession();
@@ -1362,12 +1398,6 @@
         alert(`Injected ${key}!`);
       }
       return true;
-    }
-
-    function sanitizeHtmlSourceUrls(code) {
-      if (!code) return "";
-      // Strip accidentally pasted markdown link brackets inside html attributes like src="[https://...]"
-      return code.replace(/(src|href)=["']\s*\[\s*(https?:\/\/[^\]\s"'>]+)\s*\]\s*["']/gi, '$1="$2"');
     }
 
     function agentCreateFile(filename, content = "") {
@@ -2383,11 +2413,11 @@ URL & ATTRIBUTE SAFETY PROTOCOL:
 - HTML attributes must strictly use raw URLs: src="https://..." or href="https://...".
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
-- CRITICAL: When teaching the user, showing syntax, illustrating tutorial steps, or discussing JSON or tool schemas WITHOUT wanting to actually execute them right now, enclose the code in:
+- When teaching the user, showing syntax, or discussing schemas without executing, use:
 \`\`\`example_snippet
 {"action": "...", ...}
 \`\`\`
-NEVER use \`\`\`tool_call or \`\`\`filepath: for illustrative or explanatory examples!
+NEVER use \`\`\`tool_call or \`\`\`filepath: for demonstrative examples!
 
 LINE-BASED FILE EDITING PROTOCOL:
 - Inspect code with "read_file_lines" and surgically patch with "edit_file_lines".
@@ -2404,14 +2434,14 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Read File Lines (View with line numbers):
+2. Read File Lines:
 \`\`\`tool_call
 {"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
 3. Edit Specific Lines:
 \`\`\`tool_call
-{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
+{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code"}
 \`\`\`
 
 4. Full File Creation / Overwrite:
@@ -2653,7 +2683,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
 
               const res = await fetch(endpoint, {
                 method: "POST",
-                headers: headers,
+                headers,
                 body: JSON.stringify({
                   model: model,
                   messages: [{ role: "system", content: systemPrompt }, { role: "user", content }]
@@ -2678,8 +2708,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
                 headers: {
                   "Content-Type": "application/json",
                   "x-api-key": key,
-                  "anthropic-version": "2023-06-01",
-                  "anthropic-dangerous-direct-browser-access": "true"
+                  "anthropic-version": "2023-06-01"
                 },
                 body: JSON.stringify({
                   model: model,
@@ -2722,7 +2751,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
         let agentExplicitFinished = false;
         const toolCalls = [...reply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-        // Auto-kickstart if plan was created but no tools invoked
         if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
           autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
         }
@@ -2872,7 +2900,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           }
         }
 
-        // STRICT FILE UPDATE REGEX: ONLY triggers if explicitly preceded by filepath:
         const fileBlockRegex = /```filepath:([^\s\n]+)\s*([\s\S]*?)```/g;
         let matched;
         let codeUpdated = false;
@@ -2881,7 +2908,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           const targetPath = matched[1];
           const codeBody = sanitizeHtmlSourceUrls(matched[2].trim());
 
-          // Ignored if it's an example or plan
           if (!targetPath || targetPath.includes("agent_plan") || targetPath.includes("tool_call") || targetPath.includes("example_snippet")) continue;
 
           if (codeBody.length > 5) {
@@ -2912,7 +2938,6 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
           autonomousHopCount++;
         }
 
-        // 3-step in-tab circuit breaker
         if (autoFollowUpPrompt && !agentExplicitFinished) {
           if (autonomousHopCount >= 3) {
             const taskId = `task_bg_${Date.now()}`;
