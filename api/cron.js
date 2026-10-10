@@ -1,166 +1,186 @@
 // api/cron.js
 export default async function handler(req, res) {
-  const authHeader = req.headers.authorization;
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: "Unauthorized cron execution" });
-  }
-
-  const kvUrl = process.env.KV_REST_API_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN;
-
-  if (!kvUrl || !kvToken) {
-    return res.status(500).json({ error: "Vercel KV credentials missing" });
-  }
-
-  async function kvCmd(...args) {
-    const cmd = args[0];
-    const rest = args.slice(1);
-    const r = await fetch(`${kvUrl}/${cmd}/${rest.map(encodeURIComponent).join("/")}`, {
-      headers: { Authorization: `Bearer ${kvToken}` }
-    });
-    const d = await r.json();
-    return d.result;
-  }
-
-  // --- NATIVE AGENT TOOLS ---
-  async function agentGetTime(timezone = "America/New_York") {
-    try {
-      const now = new Date();
-      const formatted = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        dateStyle: "full",
-        timeStyle: "long"
-      }).format(now);
-      return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
-    } catch (e) {
-      return `Error retrieving time for timezone "${timezone}": ${e.message}`;
+  try {
+    const authHeader = req.headers.authorization;
+    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: "Unauthorized cron execution" });
     }
-  }
 
-  async function agentGetWeather(location = "London", unit = "F") {
-    try {
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
-      if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
-      const geoData = await geoRes.json();
-      if (!geoData.results || !geoData.results.length) {
-        return `Location "${location}" not found.`;
+    const rawKvUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL ?? "";
+    const rawKvToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN ?? "";
+    const kvUrl = rawKvUrl.trim();
+    const kvToken = rawKvToken.trim();
+
+    if (!kvUrl || !kvToken) {
+      return res.status(200).json({ 
+        success: false, 
+        message: "Redis KV environment variables missing. Ensure KV_REST_API_URL and KV_REST_API_TOKEN are set in Vercel." 
+      });
+    }
+
+    async function kvCmd(...args) {
+      try {
+        const cmd = args[0];
+        const rest = args.slice(1);
+        const baseUrl = kvUrl.replace(/\/$/, "");
+        const endpoint = `${baseUrl}/${cmd}/${rest.map(encodeURIComponent).join("/")}`;
+        const r = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${kvToken}` }
+        });
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d.result;
+      } catch (e) {
+        console.error("KV command error:", e);
+        return null;
       }
-      const { latitude, longitude, name, admin1, country } = geoData.results[0];
-      
-      const isFahrenheit = String(unit).toUpperCase().includes("F");
-      const tempQuery = isFahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
-      const tempSymbol = isFahrenheit ? "°F" : "°C";
-      const windSymbol = isFahrenheit ? "mph" : "km/h";
+    }
 
-      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m${tempQuery}&timezone=auto`);
-      if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
-      const wData = await weatherRes.json();
-      const cur = wData.current;
-      return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
+    // --- NATIVE AGENT TOOLS ---
+    async function agentGetTime(timezone = "America/New_York") {
+      try {
+        const now = new Date();
+        const formatted = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          dateStyle: "full",
+          timeStyle: "long"
+        }).format(now);
+        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
+      } catch (e) {
+        return `Error retrieving time for timezone "${timezone}": ${e.message}`;
+      }
+    }
+
+    async function agentGetWeather(location = "London", unit = "F") {
+      try {
+        const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+        if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
+        const geoData = await geoRes.json();
+        if (!geoData.results || !geoData.results.length) {
+          return `Location "${location}" not found.`;
+        }
+        const { latitude, longitude, name, admin1, country } = geoData.results[0];
+        
+        const isFahrenheit = String(unit).toUpperCase().includes("F");
+        const tempQuery = isFahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
+        const tempSymbol = isFahrenheit ? "°F" : "°C";
+        const windSymbol = isFahrenheit ? "mph" : "km/h";
+
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m${tempQuery}&timezone=auto`);
+        if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
+        const wData = await weatherRes.json();
+        const cur = wData.current;
+        return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
 - Temperature: ${cur.temperature_2m}${tempSymbol} (Feels like: ${cur.apparent_temperature}${tempSymbol})
-- Relative Humidity: ${cur.relative_humidity_2m}${"%"}
+- Relative Humidity: ${cur.relative_humidity_2m}%
 - Wind Speed: ${cur.wind_speed_10m} ${windSymbol}
 - Precipitation: ${cur.precipitation} mm
 - Recorded At: ${cur.time} (${wData.timezone})`;
-    } catch (err) {
-      return `Weather fetch error: ${err.message}`;
-    }
-  }
-
-  async function agentHttpRequest(method, url, headers = {}, body = null) {
-    try {
-      const opts = {
-        method: method.toUpperCase(),
-        headers: { "Content-Type": "application/json", ...headers }
-      };
-      if (body && method.toUpperCase() !== "GET") {
-        opts.body = typeof body === "string" ? body : JSON.stringify(body);
+      } catch (err) {
+        return `Weather fetch error: ${err.message}`;
       }
-      const response = await fetch(url, opts);
-      const text = await response.text();
-      return `Status ${response.status}: ${text.slice(0, 2000)}`;
-    } catch (err) {
-      return `HTTP Request failed: ${err.message}`;
     }
-  }
 
-  async function agentWebFetch(targetUrl) {
-    try {
-      const response = await fetch(targetUrl);
-      if (!response.ok) return `Failed to fetch URL: HTTP ${response.status}`;
-      const text = await response.text();
-      return text
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 2500);
-    } catch (err) {
-      return `Failed to fetch URL: ${err.message}`;
-    }
-  }
-
-  async function agentWebSearch(query) {
-    try {
-      const encoded = encodeURIComponent(query);
-      const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
-      const res = await fetch(googleUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9"
+    async function agentHttpRequest(method, url, headers = {}, body = null) {
+      try {
+        const opts = {
+          method: method.toUpperCase(),
+          headers: { "Content-Type": "application/json", ...headers }
+        };
+        if (body && method.toUpperCase() !== "GET") {
+          opts.body = typeof body === "string" ? body : JSON.stringify(body);
         }
-      });
+        const response = await fetch(url, opts);
+        const text = await response.text();
+        return `Status ${response.status}: ${text.slice(0, 2000)}`;
+      } catch (err) {
+        return `HTTP Request failed: ${err.message}`;
+      }
+    }
 
-      if (res.ok) {
-        const html = await res.text();
-        const blockRegex = /<div class="(?:MjjYud|g|tF2C2)"[\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>[\s\S]*?<a[^>]+href="(https?:\/\/[^"]+)"[\s\S]*?(?:<div class="VwiC3b[^"]*"[^>]*>([\s\S]*?)<\/div>|)/g;
-        let match;
-        const results = [];
+    async function agentWebFetch(targetUrl) {
+      try {
+        const response = await fetch(targetUrl);
+        if (!response.ok) return `Failed to fetch URL: HTTP ${response.status}`;
+        const text = await response.text();
+        return text
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 2500);
+      } catch (err) {
+        return `Failed to fetch URL: ${err.message}`;
+      }
+    }
 
-        while ((match = blockRegex.exec(html)) !== null && results.length < 5) {
-          const title = match[1].replace(/<[^>]+>/g, "").trim();
-          const href = match[2];
-          const rawSnippet = match[3] ? match[3].replace(/<[^>]+>/g, "").trim() : "";
-          const snippet = rawSnippet ? rawSnippet : "No description.";
-          if (title && href && !href.includes("google.com/search")) {
-            results.push(`• **${title}**: ${snippet} (${href})`);
+    async function agentWebSearch(query) {
+      try {
+        const encoded = encodeURIComponent(query);
+        const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
+        const res = await fetch(googleUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9"
           }
+        });
+
+        if (res.ok) {
+          const html = await res.text();
+          const blockRegex = /<div class="(?:MjjYud|g|tF2C2)"[\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>[\s\S]*?<a[^>]+href="(https?:\/\/[^"]+)"[\s\S]*?(?:<div class="VwiC3b[^"]*"[^>]*>([\s\S]*?)<\/div>|)/g;
+          let match;
+          const results = [];
+
+          while ((match = blockRegex.exec(html)) !== null && results.length < 5) {
+            const title = match[1].replace(/<[^>]+>/g, "").trim();
+            const href = match[2];
+            const rawSnippet = match[3] ? match[3].replace(/<[^>]+>/g, "").trim() : "";
+            const snippet = rawSnippet ? rawSnippet : "No description.";
+            if (title && href && !href.includes("google.com/search")) {
+              results.push(`• **${title}**: ${snippet} (${href})`);
+            }
+          }
+          if (results.length) return results.join("\n\n");
         }
-        if (results.length) return results.join("\n\n");
+
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
+        const ddgRes = await fetch(ddgUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          }
+        });
+
+        if (ddgRes.ok) {
+          const ddgHtml = await ddgRes.text();
+          const snippetMatches = [...ddgHtml.matchAll(/class="result__snippet[^"]*">([\s\S]*?)<\/a>/g)];
+          let results = [];
+          for (let i = 0; i < Math.min(snippetMatches.length, 5); i++) {
+            const snippet = snippetMatches[i][1].replace(/<[^>]+>/g, "").trim();
+            if (snippet) results.push(`• ${snippet}`);
+          }
+          if (results.length) return results.join("\n\n");
+        }
+
+        return `No direct search matches found for "${query}".`;
+      } catch (err) {
+        return `Search error: ${err.message}`;
       }
-
-      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
-      const ddgRes = await fetch(ddgUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-      });
-
-      if (ddgRes.ok) {
-        const ddgHtml = await ddgRes.text();
-        const snippetMatches = [...ddgHtml.matchAll(/class="result__snippet[^"]*">([\s\S]*?)<\/a>/g)];
-        let results = [];
-        for (let i = 0; i < Math.min(snippetMatches.length, 5); i++) {
-          const snippet = snippetMatches[i][1].replace(/<[^>]+>/g, "").trim();
-          if (snippet) results.push(`• ${snippet}`);
-        }
-        if (results.length) return results.join("\n\n");
-      }
-
-      return `No direct search matches found for "${query}".`;
-    } catch (err) {
-      return `Search error: ${err.message}`;
     }
-  }
 
-  function getCronSystemPrompt(customRules, currentFilesContext, availableMemoryKeys, userProfileContext) {
-    return `You are an Unconstrained Autonomous Problem Solver executing on the background serverless cron worker.
-User custom instructions: ${customRules || ""}
+    function getCronSystemPrompt(customRules, currentFilesContext, availableMemoryKeys, userProfileContext) {
+      const activeRules = customRules ? customRules : "";
+      const profileSafe = userProfileContext ? userProfileContext : {};
+      const activeLocation = profileSafe.location ? profileSafe.location : "Miami, FL";
+      const activeUnit = profileSafe.tempUnit ? profileSafe.tempUnit : "F";
+      const activeTz = profileSafe.timezone ? profileSafe.timezone : "America/New_York";
+
+      return `You are an Unconstrained Autonomous Problem Solver executing on the background serverless cron worker.
+User custom instructions: ${activeRules}
 
 USER CONTEXT:
-${JSON.stringify(userProfileContext || {}, null, 2)}
+${JSON.stringify(profileSafe, null, 2)}
 
 PRIMARY WORKSPACE FILES:
 ${currentFilesContext}
@@ -278,110 +298,109 @@ AVAILABLE TOOL ACTIONS:
 
 14. Get Current Time & Date:
 \`\`\`tool_call
-{"action": "get_time", "timezone": "${userProfileContext?.timezone || "America/New_York"}"}
+{"action": "get_time", "timezone": "${activeTz}"}
 \`\`\`
 
 15. Get Live Weather:
 \`\`\`tool_call
-{"action": "get_weather", "location": "${userProfileContext?.location \vert{}\vert{} "Miami, FL"}", "unit": "${userProfileContext?.tempUnit || "F"}"}
+{"action": "get_weather", "location": "${activeLocation}", "unit": "${activeUnit}"}
 \`\`\`
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
-  }
-
-  async function callProviderModel(provider, model, key, systemPrompt, userPrompt) {
-    let retries = 2;
-    while (retries >= 0) {
-      try {
-        if (provider === "gemini") {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: `${systemPrompt}\n\nUser Request: ${userPrompt}` }]
-                }
-              ]
-            })
-          });
-          const data = await res.json();
-          if (data.error) {
-            const isOverloaded = res.status === 503 || res.status === 429 || data.error.code === 503 || data.error.code === 429;
-            if (isOverloaded && retries > 0) {
-              retries--;
-              await new Promise(r => setTimeout(r, 3000));
-              continue;
-            }
-            throw new Error(data.error.message || JSON.stringify(data.error));
-          }
-          return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-        } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
-          const endpoint = provider === "groq"
-            ? "https://api.groq.com/openai/v1/chat/completions"
-            : provider === "openrouter"
-            ? "https://openrouter.ai/api/v1/chat/completions"
-            : "https://api.openai.com/v1/chat/completions";
-
-          const headers = {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${key}`
-          };
-          if (provider === "openrouter") {
-            headers["HTTP-Referer"] = "https://omnimodel.vercel.app";
-            headers["X-Title"] = "Omni-Model Studio";
-          }
-
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              model,
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: [{ type: "text", text: userPrompt }] }
-              ]
-            })
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-          return data.choices?.[0]?.message?.content || "";
-
-        } else if (provider === "claude") {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": key,
-              "anthropic-version": "2023-06-01"
-            },
-            method: "POST",
-            body: JSON.stringify({
-              model,
-              system: systemPrompt,
-              max_tokens: 4096,
-              messages: [{ role: "user", content: userPrompt }]
-            })
-          });
-          const data = await res.json();
-          if (data.error) throw new Error(data.error.message);
-          return data.content?.[0]?.text || "";
-        }
-      } catch (err) {
-        if (retries > 0) {
-          retries--;
-          await new Promise(r => setTimeout(r, 2000));
-          continue;
-        }
-        throw err;
-      }
     }
-    return "";
-  }
 
-  try {
-    const userIds = (await kvCmd("smembers", "all_agent_users")) || [];
+    async function callProviderModel(provider, model, key, systemPrompt, userPrompt) {
+      let retries = 2;
+      while (retries >= 0) {
+        try {
+          if (provider === "gemini") {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [
+                  {
+                    role: "user",
+                    parts: [{ text: `${systemPrompt}\n\nUser Request: ${userPrompt}` }]
+                  }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) {
+              const isOverloaded = res.status === 503 ? true : (res.status === 429 ? true : (data.error.code === 503 ? true : data.error.code === 429));
+              if (isOverloaded && retries > 0) {
+                retries--;
+                await new Promise(r => setTimeout(r, 3000));
+                continue;
+              }
+              throw new Error(data.error.message ? data.error.message : JSON.stringify(data.error));
+            }
+            return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+          } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
+            const endpoint = provider === "groq"
+              ? "https://api.groq.com/openai/v1/chat/completions"
+              : provider === "openrouter"
+              ? "https://openrouter.ai/api/v1/chat/completions"
+              : "https://api.openai.com/v1/chat/completions";
+
+            const headers = {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${key}`
+            };
+            if (provider === "openrouter") {
+              headers["HTTP-Referer"] = "https://omnimodel.vercel.app";
+              headers["X-Title"] = "Omni-Model Studio";
+            }
+
+            const res = await fetch(endpoint, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                model,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: [{ type: "text", text: userPrompt }] }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message ? data.error.message : JSON.stringify(data.error));
+            return data.choices?.[0]?.message?.content ?? "";
+
+          } else if (provider === "claude") {
+            const res = await fetch("https://api.anthropic.com/v1/messages", {
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": key,
+                "anthropic-version": "2023-06-01"
+              },
+              method: "POST",
+              body: JSON.stringify({
+                model,
+                system: systemPrompt,
+                max_tokens: 4096,
+                messages: [{ role: "user", content: userPrompt }]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message);
+            return data.content?.[0]?.text ?? "";
+          }
+        } catch (err) {
+          if (retries > 0) {
+            retries--;
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          throw err;
+        }
+      }
+      return "";
+    }
+
+    const userIds = (await kvCmd("smembers", "all_agent_users")) ?? [];
     const executionResults = [];
     const now = Date.now();
 
@@ -390,25 +409,24 @@ Always continue executing autonomously until the final objective is fulfilled, t
       if (!rawUserData) continue;
 
       const userConfig = typeof rawUserData === "string" ? JSON.parse(rawUserData) : rawUserData;
-      const { 
-        provider = "gemini", 
-        apiKey, 
-        model = "gemini-pro-latest", 
-        active = true, 
-        schedules = [] 
-      } = userConfig;
+      const provider = userConfig.provider ? userConfig.provider : "gemini";
+      const apiKey = userConfig.apiKey ? userConfig.apiKey : "";
+      const model = userConfig.model ? userConfig.model : "gemini-pro-latest";
+      const active = userConfig.active !== false;
+      const schedules = Array.isArray(userConfig.schedules) ? userConfig.schedules : [];
 
       if (!active || !apiKey || !schedules.length) continue;
 
-      let userFiles = userConfig.files || {};
-      let userMemory = userConfig.longterm_memory || {};
-      let userProfile = userConfig.profile || {};
+      let userFiles = userConfig.files ? userConfig.files : {};
+      let userMemory = userConfig.longterm_memory ? userConfig.longterm_memory : {};
+      let userProfile = userConfig.profile ? userConfig.profile : {};
 
       for (let i = 0; i < schedules.length; i++) {
         const sc = schedules[i];
         if (!sc.enabled) continue;
-        const intervalMs = (parseInt(sc.intervalMinutes, 10) || 30) * 60 * 1000;
-        const lastRun = sc.lastRun || 0;
+        const parsedMins = parseInt(sc.intervalMinutes, 10);
+        const intervalMs = (isNaN(parsedMins) ? 30 : parsedMins) * 60 * 1000;
+        const lastRun = sc.lastRun ? sc.lastRun : 0;
 
         if (now - lastRun >= intervalMs) {
           let currentPrompt = `[SCHEDULED TASK TRIGGER: "${sc.id}"]\n${sc.prompt}`;
@@ -420,7 +438,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
           while (hops < 6 && !taskDone) {
             const currentFilesContext = JSON.stringify(userFiles, null, 2);
             const availableMemoryKeys = Object.keys(userMemory);
-            const systemPrompt = getCronSystemPrompt(userConfig.rules || "", currentFilesContext, availableMemoryKeys, userProfile);
+            const systemPrompt = getCronSystemPrompt(userConfig.rules, currentFilesContext, availableMemoryKeys, userProfile);
 
             try {
               lastReply = await callProviderModel(provider, model, apiKey, systemPrompt, currentPrompt);
@@ -454,27 +472,31 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
                   if (tool.action === "finish") {
                     taskDone = true;
-                    lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
-                    schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                    lastToolExecutedSummary = `Finished mission: ${tool.message ? tool.message : "Done"}`;
+                    userConfig.schedules = userConfig.schedules.filter(s => !s.id.startsWith("task_bg_"));
                   } else if (tool.action === "save_user_profile" && tool.updates) {
                     userProfile = { ...userProfile, ...tool.updates };
                     autoFollowUpPrompt = `[User Details Profile Updated]: ${JSON.stringify(userProfile)}\n\nUse this context to proceed.`;
-                    lastToolExecutedSummary = `Saved user profile details.`;
+                    lastToolExecutedSummary = "Saved user profile details.";
                   } else if (tool.action === "read_file_lines" && tool.filename) {
-                    const content = userFiles[tool.filename] || "";
+                    const content = userFiles[tool.filename] ? userFiles[tool.filename] : "";
                     const lines = content.split("\n");
-                    const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
-                    const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
+                    const parsedStart = parseInt(tool.startLine, 10);
+                    const start = Math.max(1, isNaN(parsedStart) ? 1 : parsedStart);
+                    const parsedEnd = parseInt(tool.endLine, 10);
+                    const end = Math.min(lines.length, isNaN(parsedEnd) ? lines.length : parsedEnd);
                     const numbered = lines.slice(start - 1, end).map((line, idx) => `${start + idx} | ${line}`).join("\n");
                     autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nProceed with your edits.`;
                     lastToolExecutedSummary = `Read lines ${start}-${end} of ${tool.filename}.`;
 
                   } else if (tool.action === "edit_file_lines" && tool.filename) {
-                    const content = userFiles[tool.filename] || "";
+                    const content = userFiles[tool.filename] ? userFiles[tool.filename] : "";
                     const lines = content.split("\n");
-                    const start = Math.max(1, parseInt(tool.startLine, 10) || 1);
-                    const end = Math.min(lines.length, parseInt(tool.endLine, 10) || lines.length);
-                    const newLines = (tool.newContent || "").split("\n");
+                    const parsedStart = parseInt(tool.startLine, 10);
+                    const start = Math.max(1, isNaN(parsedStart) ? 1 : parsedStart);
+                    const parsedEnd = parseInt(tool.endLine, 10);
+                    const end = Math.min(lines.length, isNaN(parsedEnd) ? lines.length : parsedEnd);
+                    const newLines = (tool.newContent ? tool.newContent : "").split("\n");
 
                     lines.splice(start - 1, (end - start + 1), ...newLines);
                     userFiles[tool.filename] = lines.join("\n");
@@ -482,18 +504,18 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     lastToolExecutedSummary = `Patched lines ${start}-${end} in ${tool.filename}.`;
 
                   } else if (tool.action === "remove_temp_schedules") {
-                    const beforeCount = schedules.length;
+                    const beforeCount = userConfig.schedules.length;
                     if (tool.id) {
-                      schedules = schedules.filter(s => s.id !== tool.id);
+                      userConfig.schedules = userConfig.schedules.filter(s => s.id !== tool.id);
                     } else {
-                      schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                      userConfig.schedules = userConfig.schedules.filter(s => !s.id.startsWith("task_bg_"));
                     }
-                    const removed = beforeCount - schedules.length;
+                    const removed = beforeCount - userConfig.schedules.length;
                     autoFollowUpPrompt = `[Cleanup Complete]: Removed ${removed} temporary handoff schedule(s). Proceed.`;
                     lastToolExecutedSummary = `Cleaned up ${removed} temp continuation schedules.`;
 
                   } else if (tool.action === "get_time") {
-                    const targetTz = tool.timezone || userProfile.timezone || "America/New_York";
+                    const targetTz = tool.timezone ? tool.timezone : (userProfile.timezone ? userProfile.timezone : "America/New_York");
                     const timeRes = await agentGetTime(targetTz);
                     if (planMatch && planMatch[1]) {
                       autoFollowUpPrompt = `[Time Data]:\n${timeRes}\n\nProceed to the next action in your plan.`;
@@ -505,8 +527,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     lastToolExecutedSummary = `Retrieved system time (${targetTz}).`;
 
                   } else if (tool.action === "get_weather") {
-                    const targetLoc = tool.location || userProfile.location || "Miami, FL";
-                    const targetUnit = tool.unit || userProfile.tempUnit || "F";
+                    const targetLoc = tool.location ? tool.location : (userProfile.location ? userProfile.location : "Miami, FL");
+                    const targetUnit = tool.unit ? tool.unit : (userProfile.tempUnit ? userProfile.tempUnit : "F");
                     const weatherRes = await agentGetWeather(targetLoc, targetUnit);
                     if (planMatch && planMatch[1]) {
                       autoFollowUpPrompt = `[Live Weather Data for "${targetLoc}"]:\n${weatherRes}\n\nProceed to the next action in your plan.`;
@@ -524,24 +546,26 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
                   } else if (tool.action === "set_schedule" && tool.id) {
-                    const existingIdx = schedules.findIndex(s => s.id === tool.id);
+                    const existingIdx = userConfig.schedules.findIndex(s => s.id === tool.id);
+                    const parsedM = parseInt(tool.intervalMinutes, 10);
+                    const safeM = Math.max(1, isNaN(parsedM) ? 30 : parsedM);
                     const scheduleObj = {
                       id: tool.id,
-                      sessionId: sc.sessionId || null,
-                      mode: sc.mode || "general",
-                      intervalMinutes: Math.max(1, parseInt(tool.intervalMinutes, 10) || 30),
-                      prompt: tool.prompt || "Run scheduled routine.",
+                      sessionId: sc.sessionId ? sc.sessionId : null,
+                      mode: sc.mode ? sc.mode : "general",
+                      intervalMinutes: safeM,
+                      prompt: tool.prompt ? tool.prompt : "Run scheduled routine.",
                       lastRun: Date.now(),
-                      nextRun: Date.now() + ((parseInt(tool.intervalMinutes, 10) || 30) * 60 * 1000),
+                      nextRun: Date.now() + (safeM * 60 * 1000),
                       enabled: true
                     };
-                    if (existingIdx !== -1) schedules[existingIdx] = scheduleObj;
-                    else schedules.push(scheduleObj);
+                    if (existingIdx !== -1) userConfig.schedules[existingIdx] = scheduleObj;
+                    else userConfig.schedules.push(scheduleObj);
                     lastToolExecutedSummary = `Registered schedule "${tool.id}".`;
 
                   } else if (tool.action === "save_to_longterm_memory") {
                     let memContent = tool.content;
-                    let memKey = tool.key || "memory_" + Date.now();
+                    let memKey = tool.key ? tool.key : "memory_" + Date.now();
                     if (tool.from_file && userFiles[tool.from_file]) {
                       memContent = userFiles[tool.from_file];
                       memKey = tool.from_file;
@@ -549,13 +573,13 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     if (memContent) {
                       userMemory[memKey] = { updatedAt: new Date().toISOString(), content: memContent };
                       if (typeof memContent === "string" && (memContent.includes("api_key") || memContent.includes("registered") || memContent.includes("token"))) {
-                        schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
+                        userConfig.schedules = userConfig.schedules.filter(s => !s.id.startsWith("task_bg_"));
                       }
                     }
                     lastToolExecutedSummary = `Saved long-term memory vault key "${memKey}".`;
 
                   } else if (tool.action === "create_file" && tool.filename) {
-                    userFiles[tool.filename] = tool.content || "";
+                    userFiles[tool.filename] = tool.content ? tool.content : "";
                     autoFollowUpPrompt = `[File Created]: '${tool.filename}' created. Proceed immediately with writing its code or moving to the next step.`;
                     lastToolExecutedSummary = `Created/Updated workspace file "${tool.filename}".`;
 
@@ -570,7 +594,8 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       let parsedUrl;
                       try { parsedUrl = new URL(tool.url); } catch(e) {}
 
-                      let rawName = tool.url.split("/").pop().split("?")[0] || "downloaded.txt";
+                      let rawName = tool.url.split("/").pop().split("?")[0];
+                      if (!rawName) rawName = "downloaded.txt";
                       if (!rawName.includes(".")) rawName += ".txt";
 
                       const genericNames = ["skill.md", "heartbeat.md", "rules.md", "rules.txt", "config.json", "api.md"];
@@ -588,9 +613,9 @@ Always continue executing autonomously until the final objective is fulfilled, t
                       lastToolExecutedSummary = `Attempted fetch of "${tool.url}".`;
                     }
                   } else if (tool.action === "http_request" && tool.url) {
-                    const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
+                    const resp = await agentHttpRequest(tool.method ? tool.method : "GET", tool.url, tool.headers ? tool.headers : {}, tool.body ? tool.body : null);
                     autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action. If this fulfilled the objective (e.g. account created or message sent), save any credentials to long-term memory, clean temporary schedules, and finish.`;
-                    lastToolExecutedSummary = `HTTP ${tool.method || "GET"} to "${tool.url}".`;
+                    lastToolExecutedSummary = `HTTP ${tool.method ? tool.method : "GET"} to "${tool.url}".`;
                   }
                 } catch (tcErr) {}
               }
@@ -611,7 +636,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
               if (autoFollowUpPrompt && !taskDone) {
                 currentPrompt = `[CONTINUE TASK - RESUMPTION PAYLOAD]
-Last Completed Action: ${lastToolExecutedSummary || "Completed intermediate step."}
+Last Completed Action: ${lastToolExecutedSummary ? lastToolExecutedSummary : "Completed intermediate step."}
 Next Immediate Step:
 ${autoFollowUpPrompt}
 
@@ -627,7 +652,7 @@ You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memor
             }
           }
 
-          if (schedules.find(s => s.id === sc.id)) {
+          if (userConfig.schedules.find(s => s.id === sc.id)) {
             sc.lastRun = now;
             sc.nextRun = now + intervalMs;
             sc.enabled = true;
@@ -641,13 +666,16 @@ You have ALREADY verified prerequisite context. Do NOT call "read_longterm_memor
       userConfig.files = userFiles;
       userConfig.longterm_memory = userMemory;
       userConfig.profile = userProfile;
-      userConfig.schedules = schedules;
       userConfig.updatedAt = new Date().toISOString();
       await kvCmd("set", `agent:user:${userId}`, JSON.stringify(userConfig));
     }
 
     return res.status(200).json({ success: true, processed: executionResults });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error("Cron Handler Crash:", err);
+    return res.status(200).json({ 
+      success: false, 
+      error: err.message ? err.message : "Internal serverless execution failure" 
+    });
   }
 }
