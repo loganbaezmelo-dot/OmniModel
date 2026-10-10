@@ -170,15 +170,20 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST clean all temporary background tasks using "remove_temp_schedules" to prevent duplicate registration loops.
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. When asked to interact with or create an account on a platform (e.g. Moltbook, or any external service):
-   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page (e.g. "https://moltbook.com").
+1. IDEMPOTENCY / NO-DUPLICATE RULE:
+   - Before registering an account on any platform, check if valid credentials (e.g. an "api_key" or "token") ALREADY exist in [AVAILABLE LONG-TERM MEMORY KEYS] or in workspace files.
+   - If credentials ALREADY exist, DO NOT register again! Use the existing credentials.
+2. CONTEXTUAL RELEVANCE RULE:
+   - Only execute onboarding when explicitly requested to sign up, register, or post.
+3. ONBOARDING SEQUENCE:
+   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page.
    - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
    - Step C: Once the skill or API instructions are fetched, save or read them immediately.
    - Step D: Identify the required registration/action endpoint, headers, and JSON body.
    - Step E: Use "http_request" to execute the POST/action directly.
-2. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
-3. Post-Registration Cleanup: Clean temporary continuation schedules immediately after receiving credentials.
-4. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
+4. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
+5. Post-Registration Cleanup: Clean temporary continuation schedules immediately after receiving credentials.
+6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -391,7 +396,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
           let lastReply = "";
           let lastToolExecutedSummary = "";
 
-          // Run up to 6 execution hops per cron cycle
           while (hops < 6 && !taskDone) {
             const currentFilesContext = JSON.stringify(userFiles, null, 2);
             const availableMemoryKeys = Object.keys(userMemory);
@@ -419,7 +423,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                 try {
                   const tool = JSON.parse(tc[1]);
 
-                  // Passive/inspection tools DO NOT burn an execution hop
                   if (
                     tool.action !== "remove_temp_schedules" && 
                     tool.action !== "read_longterm_memory" && 
@@ -431,7 +434,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   if (tool.action === "finish") {
                     taskDone = true;
                     lastToolExecutedSummary = `Finished mission: ${tool.message || "Done"}`;
-                    // Automatically clean all temporary background tasks
                     schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
                   } else if (tool.action === "read_file_lines" && tool.filename) {
                     const content = userFiles[tool.filename] || "";
@@ -490,7 +492,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
                     const content = rec ? (typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)) : `Key "${tool.key}" not found in long-term memory.`;
-                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nDIRECTIVE: You now have the context. Do NOT read this memory key or any placeholder file again. Immediately search for or fetch the platform's website (e.g. via web_search or web_fetch to find /skill.md) to discover the API endpoints and execute the request.`;
+                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nDIRECTIVE: Use this context ONLY if relevant to the user's explicit request. If this answers the user's query or credentials already exist, answer directly and do NOT register new accounts or repeat discovery unnecessarily.`;
                     lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
                   } else if (tool.action === "set_schedule" && tool.id) {
@@ -518,7 +520,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                     }
                     if (memContent) {
                       userMemory[memKey] = { updatedAt: new Date().toISOString(), content: memContent };
-                      // Auto-clean temporary continuation schedules when saving final output
                       if (typeof memContent === "string" && (memContent.includes("api_key") || memContent.includes("registered") || memContent.includes("token"))) {
                         schedules = schedules.filter(s => !s.id.startsWith("task_bg_"));
                       }
