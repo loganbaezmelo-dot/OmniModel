@@ -125,7 +125,6 @@ export default async function handler(req, res) {
         if (results.length) return results.join("\n\n");
       }
 
-      // Fallback: DuckDuckGo HTML
       const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
       const ddgRes = await fetch(ddgUrl, {
         headers: {
@@ -170,20 +169,26 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST clean all temporary background tasks using "remove_temp_schedules" to prevent duplicate registration loops.
 
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
-1. IDEMPOTENCY / NO-DUPLICATE RULE:
-   - Before registering an account on any platform, check if valid credentials (e.g. an "api_key" or "token") ALREADY exist in [AVAILABLE LONG-TERM MEMORY KEYS] or in workspace files.
-   - If credentials ALREADY exist, DO NOT register again! Use the existing credentials.
+1. TARGETED IDEMPOTENCY RULE:
+   - When asked to register, sign up, or create an account for a SPECIFIC service:
+     Inspect [AVAILABLE LONG-TERM MEMORY KEYS] for that specific service name.
+     If valid credentials (e.g. api_key or token) already exist in vault memory for that requested platform:
+     DO NOT register again! Clean any temp tasks and call:
+     \`\`\`tool_call
+     {"action": "finish", "message": "Account already registered and active."}
+     \`\`\`
+   - For all other tasks, execute the objective normally without false stops.
 2. CONTEXTUAL RELEVANCE RULE:
-   - Only execute onboarding when explicitly requested to sign up, register, or post.
+   - Only execute service onboarding when explicitly requested to sign up, register, or post.
 3. ONBOARDING SEQUENCE:
-   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page.
+   - Step A: If you do not have the direct URL or instructions for the requested service, use "web_search" to find its site or "web_fetch" to fetch its root page.
    - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
    - Step C: Once the skill or API instructions are fetched, save or read them immediately.
    - Step D: Identify the required registration/action endpoint, headers, and JSON body.
    - Step E: Use "http_request" to execute the POST/action directly.
 4. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
 5. Post-Registration Cleanup: Clean temporary continuation schedules immediately after receiving credentials.
-6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
+6. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload, UNLESS targeted credentials already exist as defined in Rule 1.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
 - When demonstrating or explaining tools without executing, use:
@@ -492,7 +497,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
                   } else if (tool.action === "read_longterm_memory" && tool.key) {
                     const rec = userMemory[tool.key];
                     const content = rec ? (typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)) : `Key "${tool.key}" not found in long-term memory.`;
-                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nDIRECTIVE: Use this context ONLY if relevant to the user's explicit request. If this answers the user's query or credentials already exist, answer directly and do NOT register new accounts or repeat discovery unnecessarily.`;
+                    autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${content}\n\nCONTEXT LOADED: Address the task using this information. Do NOT trigger false stops if the user requested a different service or an unrelated task.`;
                     lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
                   } else if (tool.action === "set_schedule" && tool.id) {
