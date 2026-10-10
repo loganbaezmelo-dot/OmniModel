@@ -39,14 +39,14 @@ export default async function handler(req, res) {
 
   async function agentGetWeather(location = "London") {
     try {
-      const geoRes = await fetch(`[https://geocoding-api.open-meteo.com/v1/search?name=$](https://geocoding-api.open-meteo.com/v1/search?name=$){encodeURIComponent(location)}&count=1&language=en&format=json`);
+      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
       if (!geoRes.ok) return `Geocoding lookup failed for "${location}".`;
       const geoData = await geoRes.json();
       if (!geoData.results || !geoData.results.length) {
         return `Location "${location}" not found.`;
       }
       const { latitude, longitude, name, admin1, country } = geoData.results[0];
-      const weatherRes = await fetch(`[https://api.open-meteo.com/v1/forecast?latitude=$](https://api.open-meteo.com/v1/forecast?latitude=$){latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
+      const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto`);
       if (!weatherRes.ok) return `Weather lookup failed for "${location}".`;
       const wData = await weatherRes.json();
       const cur = wData.current;
@@ -98,7 +98,27 @@ export default async function handler(req, res) {
   async function agentWebSearch(query) {
     try {
       const encoded = encodeURIComponent(query);
-      const ddgRes = await fetch(`[https://api.duckduckgo.com/?q=$](https://api.duckduckgo.com/?q=$){encoded}&format=json&no_html=1&skip_disambig=1`);
+      const ddgUrl = `https://html.duckduckgo.com/html/?q=${encoded}`;
+      const res = await fetch(ddgUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+
+      if (res.ok) {
+        const html = await res.text();
+        const snippetMatches = [...html.matchAll(/class="result__snippet[^"]*">([\s\S]*?)<\/a>/g)];
+        let results = [];
+        for (let i = 0; i < Math.min(snippetMatches.length, 5); i++) {
+          const snippet = snippetMatches[i][1].replace(/<[^>]+>/g, "").trim();
+          if (snippet) {
+            results.push(`• ${snippet}`);
+          }
+        }
+        if (results.length) return results.join("\n\n");
+      }
+
+      const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encoded}&format=json&no_html=1&skip_disambig=1`);
       if (ddgRes.ok) {
         const parsed = await ddgRes.json();
         let results = [];
@@ -110,6 +130,7 @@ export default async function handler(req, res) {
         }
         if (results.length) return results.join("\n");
       }
+
       return `No direct search matches found for "${query}".`;
     } catch (err) {
       return `Search error: ${err.message}`;
@@ -130,29 +151,29 @@ PLATFORM & CREDENTIAL ISOLATION:
 - Match filenames explicitly to prevent cross-service leaks.
 
 TEACHING & EXAMPLES WRAPPER PROTOCOL:
-- CRITICAL: When teaching the user, showing examples, illustrating tutorial steps, or discussing JSON or tool schemas WITHOUT wanting to actually execute them right now, enclose the code in:
+- When demonstrating or explaining tools without executing, use:
 \`\`\`example_snippet
 {"action": "...", ...}
 \`\`\`
-NEVER use \`\`\`tool_call or \`\`\`filepath: for illustrative or explanatory examples!
+Never use \`\`\`tool_call or \`\`\`filepath: for demonstrative code!
 
 LINE-BASED FILE EDITING:
-- Inspect with "read_file_lines" and surgically patch with "edit_file_lines".
+- Inspect with "read_file_lines" and patch with "edit_file_lines".
 
-AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
+AVAILABLE TOOL ACTIONS:
 1. Multi-Step Plan:
 \`\`\`agent_plan
 ["Step 1: description", "Step 2: description"]
 \`\`\`
 
-2. Read File Lines (View with line numbers):
+2. Read File Lines:
 \`\`\`tool_call
 {"action": "read_file_lines", "filename": "index.html", "startLine": 1, "endLine": 40}
 \`\`\`
 
 3. Edit Specific Lines:
 \`\`\`tool_call
-{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code here"}
+{"action": "edit_file_lines", "filename": "index.html", "startLine": 10, "endLine": 20, "newContent": "replacement code"}
 \`\`\`
 
 4. Full File Creation / Overwrite:
@@ -167,12 +188,12 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 
 6. Web Page / Documentation Fetch:
 \`\`\`tool_call
-{"action": "web_fetch", "url": "[https://example.com/file.md](https://example.com/file.md)"}
+{"action": "web_fetch", "url": "https://example.com/file.md"}
 \`\`\`
 
 7. HTTP Request:
 \`\`\`tool_call
-{"action": "http_request", "method": "POST", "url": "[https://api.example.com](https://api.example.com)", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
+{"action": "http_request", "method": "POST", "url": "https://api.example.com", "headers": {"Authorization": "Bearer key"}, "body": {"key": "val"}}
 \`\`\`
 
 8. Explicit Goal Complete:
@@ -218,7 +239,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
     while (retries >= 0) {
       try {
         if (provider === "gemini") {
-          const res = await fetch(`[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){model}:generateContent?key=${key}`, {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -244,17 +265,17 @@ Always continue executing autonomously until the final objective is fulfilled, t
 
         } else if (provider === "openai" || provider === "groq" || provider === "openrouter") {
           const endpoint = provider === "groq"
-            ? "[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)"
+            ? "https://api.groq.com/openai/v1/chat/completions"
             : provider === "openrouter"
-            ? "[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)"
-            : "[https://api.openai.com/v1/chat/completions](https://api.openai.com/v1/chat/completions)";
+            ? "https://openrouter.ai/api/v1/chat/completions"
+            : "https://api.openai.com/v1/chat/completions";
 
           const headers = {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${key}`
           };
           if (provider === "openrouter") {
-            headers["HTTP-Referer"] = "[https://omnimodel.vercel.app](https://omnimodel.vercel.app)";
+            headers["HTTP-Referer"] = "https://omnimodel.vercel.app";
             headers["X-Title"] = "Omni-Model Studio";
           }
 
@@ -274,7 +295,7 @@ Always continue executing autonomously until the final objective is fulfilled, t
           return data.choices?.[0]?.message?.content || "";
 
         } else if (provider === "claude") {
-          const res = await fetch("[https://api.anthropic.com/v1/messages](https://api.anthropic.com/v1/messages)", {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -356,7 +377,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
               }
               const toolCalls = [...lastReply.matchAll(/```tool_call\s*([\s\S]*?)\s*```/g)];
 
-              // Auto-kickstart if plan was created but no tools invoked
               if (parsedPlan && parsedPlan.length > 0 && toolCalls.length === 0) {
                 autoFollowUpPrompt = `[PLAN INITIALIZED]: Plan accepted. Proceed immediately with executing Step 1: "${parsedPlan[0]}". Call the required tool actions now.`;
               }
@@ -477,7 +497,6 @@ Always continue executing autonomously until the final objective is fulfilled, t
                 } catch (tcErr) {}
               }
 
-              // STRICT PARSER: ONLY modify files if explicitly tagged with filepath:
               const fileBlockRegex = /```filepath:([^\s\n]+)\s*([\s\S]*?)```/g;
               let match;
               while ((match = fileBlockRegex.exec(lastReply)) !== null) {
