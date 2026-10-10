@@ -867,7 +867,7 @@
             statusEl.innerText = `Synced (${agentSchedules.length} Tasks)`;
             statusEl.style.color = "var(--success)";
           }
-          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and${agentSchedules.length} tasks registered in Vercel KV.`);
+          appendChat("system-agent", `☁️ Cloud Cron Synced: Provider [${provider}], Model [${model}], and ${agentSchedules.length} tasks registered in Vercel KV.`);
         } else {
           throw new Error("HTTP " + res.status);
         }
@@ -919,7 +919,7 @@
         box.innerText = "(Memory vault is empty)";
         return;
       }
-      box.innerText = keys.map(k => `• [${k}]:${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
+      box.innerText = keys.map(k => `• [${k}]: ${typeof mem[k].content === 'string' ? mem[k].content.slice(0, 80) : JSON.stringify(mem[k].content).slice(0, 80)}...`).join("\n");
     }
 
     let agentSchedules = JSON.parse(localStorage.getItem("omni_agent_schedules") || "[]");
@@ -964,7 +964,7 @@
         agentSchedules.push(scheduleObj);
       }
       saveSchedules();
-      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every${intervalMinutes} min.`);
+      appendChat("system-agent", `⏰ Scheduled Routine Registered: [${id}] every ${intervalMinutes} min.`);
       return true;
     }
 
@@ -1121,7 +1121,7 @@
           dateStyle: "full",
           timeStyle: "long"
         }).format(now);
-        return `Current Date & Time (${timezone}): ${formatted} [ISO:${now.toISOString()}]`;
+        return `Current Date & Time (${timezone}): ${formatted} [ISO: ${now.toISOString()}]`;
       } catch (e) {
         return `Error retrieving time for timezone "${timezone}": ${e.message}`;
       }
@@ -1141,7 +1141,7 @@
         const wData = await weatherRes.json();
         const cur = wData.current;
         return `Weather for ${name}${admin1 ? ', ' + admin1 : ''}, ${country}:
-- Temperature: ${cur.temperature_2m}°C (Feels like:${cur.apparent_temperature}°C)
+- Temperature: ${cur.temperature_2m}°C (Feels like: ${cur.apparent_temperature}°C)
 - Relative Humidity: ${cur.relative_humidity_2m}${"%"}
 - Wind Speed: ${cur.wind_speed_10m} km/h
 - Precipitation: ${cur.precipitation} mm
@@ -1310,9 +1310,9 @@
     async function agentHttpRequest(method, url, headers = {}, body = null) {
       const res = await callBackendProxy(url, method, headers, body);
       if (!res.ok) {
-        return `HTTP Request failed (Status ${res.status}):${res.data}`;
+        return `HTTP Request failed (Status ${res.status}): ${res.data}`;
       }
-      return `Status ${res.status}:${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
+      return `Status ${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 2000) : JSON.stringify(res.data)}`;
     }
 
     function onModeChange() {
@@ -1518,7 +1518,7 @@
         const spoken = (finalStr || interim).trim();
         if (spoken) {
           lastRecognizedText = spoken;
-          promptInput.value = basePrompt ? `${basePrompt}${spoken}` : spoken;
+          promptInput.value = basePrompt ? `${basePrompt} ${spoken}` : spoken;
         }
 
         if (voiceDispatchTimer) clearTimeout(voiceDispatchTimer);
@@ -1690,7 +1690,7 @@
         renderSandboxPreview();
 
         statusText.innerText = `Pulled ${path}`;
-        alert(`Successfully pulled ${path} from${repo}!`);
+        alert(`Successfully pulled ${path} from ${repo}!`);
         toggleSidebar();
       } catch (err) {
         statusText.innerText = "Pull failed";
@@ -1745,7 +1745,7 @@
         currentFileSha = putData.content?.sha || null;
         statusText.innerText = `Pushed: ${commitMsg}`;
         document.getElementById("diff-banner").style.display = "none";
-        alert(`Successfully pushed ${targetPath} to${repo}!`);
+        alert(`Successfully pushed ${targetPath} to ${repo}!`);
       } catch (err) {
         statusText.innerText = "Push failed";
         alert("GitHub Push Error: " + err.message);
@@ -2108,7 +2108,7 @@
         const logsContainer = document.getElementById("console-logs");
         const row = document.createElement("div");
         row.className = `log-item ${e.data.level}`;
-        row.innerText = `[${e.data.level.toUpperCase()}]${e.data.text}`;
+        row.innerText = `[${e.data.level.toUpperCase()}] ${e.data.text}`;
         logsContainer.appendChild(row);
         logsContainer.scrollTop = logsContainer.scrollHeight;
       }
@@ -2413,6 +2413,7 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - NEVER claim an action is finished simply because you read documentation, summarized a memory key, or outlined steps.
 - When the user asks to "make an account", "send a message", "post data", or "create an entity", you MUST actively find the exact HTTP API endpoint (e.g. from workspace instruction files like skill.md or docs), construct the request payload, and execute the actual "http_request" tool action.
 - You are FORBIDDEN from calling the "finish" tool action until the live execution network request has returned a status response. Summarizing what a platform is does NOT equal completing an action on it.
+- ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST call "remove_temp_schedules" to clean all temporary background tasks, preventing duplicate registrations.
 
 URL & ATTRIBUTE SAFETY PROTOCOL:
 - NEVER place markdown brackets [ or ] around URLs inside HTML attributes (e.g. href="[https://...]" or src="[https://...]").
@@ -2537,7 +2538,6 @@ B,20
       if (activeMode === "general") {
         return `You are an Unconstrained Autonomous Problem Solver with live Web Browsing, Weather & Time APIs, Persistent Long-Term Memory, and Serverless In-Tab & Cloud Scheduling.
 User custom instructions: ${customRules}
-Active workspace file: "${activeFileName}"
 
 PRIMARY WORKSPACE FILES:
 ${currentFilesContext}
@@ -2551,6 +2551,17 @@ ${fallbackProtocol}
 ${schedulesContext}
 
 ${commonTools}
+
+AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
+1. When asked to interact with or create an account on a platform (e.g. Moltbook, or any external service):
+   - Step A: If you do not have the direct URL or instructions, use "web_search" to find the platform's official site or "web_fetch" to fetch its root page (e.g. "https://moltbook.com").
+   - Step B: Inspect the fetched content or check standard agent endpoints (e.g. root domain + "/skill.md", "/api", or discovery docs).
+   - Step C: Once the skill or API instructions are fetched, save or read them immediately.
+   - Step D: Identify the required registration/action endpoint, headers, and JSON body.
+   - Step E: Use "http_request" to execute the POST/action directly.
+2. Anti-Looping Rule: Never read notes.txt or memory keys more than once per goal. Once the platform name or concept is known, immediately proceed to Step A (web_search / web_fetch).
+3. Post-Registration Cleanup: Immediately call "remove_temp_schedules" upon receiving credentials to eliminate background continuation schedules.
+4. Completion Rule: Never call "finish" until the real registration or target API request has completed and returned its response payload.
 
 Always continue executing autonomously until the final objective is fulfilled, then call the "finish" tool action.`;
       }
@@ -2862,7 +2873,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `📖 Retrieving long-term memory key "${tool.key}"...`);
               const memData = readLongTermMemoryKey(tool.key);
               appendChat("system-agent", `📂 Memory [${tool.key}]:\n${memData}`);
-              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nProceed directly with your objective using this information. Do not re-fetch it.`;
+              autoFollowUpPrompt = `[Archived Long-Term Memory for "${tool.key}"]:\n${memData}\n\nDIRECTIVE: You now have the context. Do NOT read this memory key or any placeholder file again. Immediately search for or fetch the platform's website (e.g. via web_search or web_fetch to find /skill.md) to discover the API endpoints and execute the request.`;
               lastToolExecutedSummary = `Read memory key "${tool.key}".`;
 
             } else if (tool.action === "set_schedule" && tool.id) {
@@ -2879,6 +2890,10 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               if (memContent) {
                 saveToLongTermMemory(memKey, memContent);
                 appendChat("system-agent", `🧠 Saved "${memKey}" into Persistent Long-Term Memory Vault!`);
+                // Auto-clean temporary continuation schedules when saving final output
+                if (typeof memContent === "string" && (memContent.includes("api_key") || memContent.includes("registered") || memContent.includes("token"))) {
+                  cleanupTempSchedules();
+                }
               }
               lastToolExecutedSummary = `Saved long-term memory vault key "${memKey}".`;
 
@@ -2938,7 +2953,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               appendChat("system-agent", `📡 HTTP ${tool.method || "GET"}: ${tool.url}...`);
               const resp = await agentHttpRequest(tool.method || "GET", tool.url, tool.headers || {}, tool.body || null);
               appendChat("system-agent", `📬 Response:\n${resp}`);
-              autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action.`;
+              autoFollowUpPrompt = `[HTTP API Output]:\n${resp}\n\nAnalyze this response and proceed with the next action. If this fulfilled the objective (e.g. account created or message sent), save any credentials to long-term memory, clean temporary schedules, and finish.`;
               lastToolExecutedSummary = `HTTP ${tool.method || "GET"} to "${tool.url}".`;
             }
           } catch(err) {
@@ -3002,7 +3017,7 @@ Next Immediate Step:
 ${autoFollowUpPrompt}
 
 CRITICAL DIRECTIVE:
-You have ALREADY verified your memory and fetched prerequisite files. Do NOT call "read_longterm_memory" or "remove_temp_schedules". Directly execute the concrete network/API or file action required above.`;
+You have ALREADY verified your memory and fetched prerequisite files. Do NOT call "read_longterm_memory". Directly execute the concrete network/API action required above. Once completed, clean temporary schedules immediately.`;
 
             setAgentSchedule(taskId, 1, richContinuationPrompt);
 
