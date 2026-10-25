@@ -1335,7 +1335,15 @@
 
     async function agentWebSearch(query) {
       try {
-        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
+        // Strip filler/conversational words so search engines get concise keywords
+        const stopWords = new Set([
+          "what", "is", "the", "a", "an", "how", "to", "do", "i", "can", "for", 
+          "in", "of", "on", "and", "tell", "me", "about", "please", "find", "show"
+        ]);
+        const words = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/);
+        const meaningfulWords = words.filter(w => !stopWords.has(w.toLowerCase()));
+        const cleanQuery = (meaningfulWords.length > 0 ? meaningfulWords.slice(0, 5) : words.slice(0, 4)).join(" ");
+
         const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await callBackendProxy(googleUrl, "GET");
@@ -1390,7 +1398,7 @@
           if (ddgResults.length > 0) return ddgResults.join("\n\n");
         }
 
-        return `No direct search matches found for "${query}".`;
+        return `No direct search matches found for "${cleanQuery}".`;
       } catch (err) {
         return `Search error: ${err.message}`;
       }
@@ -2526,6 +2534,12 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - You are FORBIDDEN from calling the "finish" tool action until the live execution network request has returned a status response. Summarizing what a platform is does NOT equal completing an action on it.
 - ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST call "remove_temp_schedules" to clean all temporary background tasks, preventing duplicate registrations.
 
+WEB SEARCH QUERY DIRECTIVE:
+- When using "web_search", use concise, keyword-focused search queries.
+- Strip conversational filler and question phrases ("what is the", "how do i", "can you show me").
+- Focus strictly on key nouns and entities (e.g. query "recipe chocolate chip cookies" instead of "what is the recipe for chocolate chip cookies"; query "install lucide icons html" instead of "how do i install lucide icons on html").
+- DO NOT combine random strings of instructions into single searches.
+
 URL & ATTRIBUTE SAFETY PROTOCOL:
 - NEVER place markdown brackets [ or ] around URLs inside HTML attributes (e.g. href="[https://...]" or src="[https://...]").
 - HTML attributes must strictly use raw URLs: src="https://..." or href="https://...".
@@ -2569,7 +2583,7 @@ AVAILABLE TOOL ACTIONS (ONLY USE FOR ACTIVE REAL EXECUTION):
 
 5. Web Search:
 \`\`\`tool_call
-{"action": "web_search", "query": "concise query"}
+{"action": "web_search", "query": "concise keyword query"}
 \`\`\`
 
 6. Web Page / Documentation Fetch:
@@ -2681,7 +2695,7 @@ AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
      \`\`\`
    - NEVER check or report keys from different platforms.
 2. CONCISE WEB SEARCH DISCIPLINE:
-   - Keep searches to 1 to 3 words (e.g. "clawhub", "clawhub platform"). Do NOT stuff sentences or combine unrelated keywords.
+   - Keep searches to 1 to 4 clean keywords (e.g. "clawhub ai" or "recipe chocolate chip cookies"). Do NOT stuff sentences or filler phrases.
 3. ONBOARDING SEQUENCE:
    - Step A: Fetch docs or use clean search.
    - Step B: Extract API endpoints and payload schemas.
