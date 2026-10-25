@@ -117,7 +117,14 @@ export default async function handler(req, res) {
 
     async function agentWebSearch(query) {
       try {
-        const cleanQuery = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/).slice(0, 3).join(" ");
+        const stopWords = new Set([
+          "what", "is", "the", "a", "an", "how", "to", "do", "i", "can", "for", 
+          "in", "of", "on", "and", "tell", "me", "about", "please", "find", "show"
+        ]);
+        const words = query.replace(/[^\w\s.-]/g, "").trim().split(/\s+/);
+        const meaningfulWords = words.filter(w => !stopWords.has(w.toLowerCase()));
+        const cleanQuery = (meaningfulWords.length > 0 ? meaningfulWords.slice(0, 5) : words.slice(0, 4)).join(" ");
+
         const encoded = encodeURIComponent(cleanQuery);
         const googleUrl = `https://www.google.com/search?q=${encoded}&hl=en&gl=us&num=7`;
         const res = await fetch(googleUrl, {
@@ -164,7 +171,7 @@ export default async function handler(req, res) {
           if (results.length) return results.join("\n\n");
         }
 
-        return `No direct search matches found for "${query}".`;
+        return `No direct search matches found for "${cleanQuery}".`;
       } catch (err) {
         return `Search error: ${err.message}`;
       }
@@ -198,6 +205,11 @@ ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - You are STRICTLY FORBIDDEN from calling the "finish" tool action until the live execution request has been submitted and returned a real response. Summarizing a service does NOT complete an action on it.
 - ONCE THE CREDENTIALS OR REGISTRATION SUCCEED: You MUST clean all temporary background tasks using "remove_temp_schedules" to prevent duplicate registration loops.
 
+WEB SEARCH QUERY DIRECTIVE:
+- Use concise, keyword-focused search queries.
+- Strip conversational filler and question phrases ("what is the", "how do i", "can you show me").
+- Focus strictly on key entities (e.g. "recipe chocolate chip cookies" instead of "what is the recipe for chocolate chip cookies").
+
 AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
 1. TARGET LOCK & MANDATORY PRE-CHECK:
    - Identify the EXACT service requested by the user.
@@ -209,7 +221,7 @@ AUTONOMOUS SERVICE DISCOVERY & ONBOARDING PROTOCOL:
      \`\`\`
    - NEVER report keys from a different platform.
 2. CONCISE WEB SEARCH DISCIPLINE:
-   - When searching for a platform, use short search queries of 1 to 3 words. Do NOT combine multi-sentence keywords into search queries.
+   - When searching for a platform, use short search queries of 1 to 4 keywords. Do NOT combine multi-sentence keywords into search queries.
 3. ONBOARDING SEQUENCE:
    - Step A: Find the platform's official site or docs.
    - Step B: Identify endpoints and payload format.
