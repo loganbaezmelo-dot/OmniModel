@@ -2515,6 +2515,11 @@ PLATFORM & CREDENTIAL ISOLATION PROTOCOL:
 - Match filenames and service names explicitly to prevent cross-service leaks.
 - CROSS-PLATFORM ISOLATION: When the user asks for Platform A (e.g. "clawhub"), NEVER inspect or report credentials for Platform B (e.g. "moltbook"). If no memory key exists containing the exact requested platform name, DO NOT call read_longterm_memory on other services!
 
+SUMMARY & INQUIRY REPORTING PROTOCOL:
+- When the user asks "what did you fetch?", "summarize the file", "what is in this document?", or asks questions about documentation, DO NOT simply call finish with a vague message like "I inspected the file"!
+- You MUST write a detailed, direct explanation or breakdown of the fetched contents inside your conversational assistant response so the user can read it.
+- Only call {"action": "finish"} AFTER you have fully displayed or summarized the contents in your message text.
+
 ACTION & EXECUTION ENFORCEMENT PROTOCOL:
 - NEVER claim an action is finished simply because you read documentation, summarized a memory key, or outlined steps.
 - When the user asks to "make an account", "send a message", "post data", or "create an entity", you MUST actively find the exact HTTP API endpoint (e.g. from workspace instruction files like skill.md or docs), construct the request payload, and execute the actual "http_request" tool action.
@@ -2950,7 +2955,7 @@ Available: 'tailwind', 'lucide', 'fontawesome', 'alpine', 'chartjs'
               const numbered = lines.slice(start - 1, end).map((line, idx) => `${start + idx} | ${line}`).join("\n");
               
               appendChat("system-agent", `📄 Inspected lines ${start}-${end} of "${tool.filename}"`);
-              autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nReview these lines and proceed with your edits or next step.`;
+              autoFollowUpPrompt = `[File Lines: ${tool.filename} (lines ${start}-${end} of ${lines.length})]:\n${numbered}\n\nDIRECTIVE: If the user asked you what was fetched, what is in the document, or to summarize this file, write a complete and direct explanation of these contents in your response! Do NOT finish with a generic "I read it" message without displaying what you found.`;
               lastToolExecutedSummary = `Read lines ${start}-${end} of ${tool.filename}.`;
 
             } else if (tool.action === "edit_file_lines" && tool.filename) {
